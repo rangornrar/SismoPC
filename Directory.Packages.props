@@ -5,6 +5,8 @@
   <ItemGroup>
     <!-- Données -->
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <!-- SQLite natif corrigé (CVE-2025-6965) : remplace la version 2.1.11 tirée par Microsoft.Data.Sqlite -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <!-- Hébergement du service -->
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
