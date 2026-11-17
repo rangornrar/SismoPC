@@ -266,6 +266,20 @@ public sealed class SismoStore : IDisposable
         return raised;
     }
 
+    /// <summary>Alertes encore en cours (non levées).</summary>
+    public IReadOnlyList<HardwareAlert> ReadOpenAlerts()
+    {
+        using var cmd = Command("SELECT kind, severity, subject, message FROM alert WHERE cleared IS NULL ORDER BY severity DESC, raised");
+        using var r = cmd.ExecuteReader();
+        var list = new List<HardwareAlert>();
+        while (r.Read())
+        {
+            list.Add(new HardwareAlert((AlertKind)r.GetInt32(0), (AlertSeverity)r.GetInt32(1), r.GetString(2), r.GetString(3)));
+        }
+
+        return list;
+    }
+
     // ---------- Inventaire ----------
 
     public void UpsertComponents(IEnumerable<HardwareComponent> components, DateTimeOffset now)

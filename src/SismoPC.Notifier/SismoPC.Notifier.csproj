@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <!-- WinExe : pas de fenêtre de console -->
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>SismoPC.Notifier</RootNamespace>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SismoPC.Core\SismoPC.Core.csproj" />
+  </ItemGroup>
+</Project>

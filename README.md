@@ -20,8 +20,9 @@
 | --- | --- |
 | `src/SismoPC.Core` | Détection des épisodes et anomalies, score de santé, textes d'explication |
 | `src/SismoPC.Data` | Base SQLite locale (`C:\ProgramData\SismoPC`) |
-| `src/SismoPC.Collectors` | Lecture des compteurs Windows, WMI, santé des disques, journaux |
-| `src/SismoPC.Service` | Service Windows de collecte |
+| `src/SismoPC.Collectors` | Lecture des compteurs Windows, WMI, températures, santé des disques, journaux |
+| `src/SismoPC.Service` | Service Windows de collecte et canal nommé |
+| `src/SismoPC.Notifier` | Notifications Windows dans la session de l'utilisateur |
 | `tests/` | Tests automatisés |
 
 ## Compiler

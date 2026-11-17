@@ -93,6 +93,7 @@ public sealed class SismoStoreTests : IDisposable
         _store.SyncAlerts([low], T0.AddHours(1)).ShouldBeEmpty(); // déjà connue : pas de nouvelle notification
         _store.SyncAlerts([], T0.AddHours(2)).ShouldBeEmpty();
         _store.SyncAlerts([low], T0.AddHours(3)).ShouldHaveSingleItem(); // revenue : nouvelle alerte
+        _store.ReadOpenAlerts().ShouldHaveSingleItem().Subject.ShouldBe("D:");
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using Serilog;
+using SismoPC.Core.Ipc;
 using SismoPC.Service;
 
 var dataDir = SismoPaths.DataDirectory;
@@ -13,6 +14,9 @@ builder.Services.AddSerilog((_, logger) => logger
         rollingInterval: RollingInterval.Day,
         retainedFileCountLimit: 14,
         formatProvider: System.Globalization.CultureInfo.InvariantCulture));
+builder.Services.AddSingleton<EventHub>();
+builder.Services.AddSingleton<StatusProvider>();
 builder.Services.AddHostedService<CollectionWorker>();
+builder.Services.AddHostedService<PipeServer>();
 
 await builder.Build().RunAsync().ConfigureAwait(false);

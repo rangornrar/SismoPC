@@ -31,6 +31,9 @@ jobs:
       - name: Publication du service (x64, autonome)
         run: dotnet publish src/SismoPC.Service/SismoPC.Service.csproj --configuration Release --runtime win-x64 --self-contained true --output publish/service
 
+      - name: Publication du Notifier (x64, autonome)
+        run: dotnet publish src/SismoPC.Notifier/SismoPC.Notifier.csproj --configuration Release --runtime win-x64 --self-contained true --output publish/notifier
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -39,5 +42,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sismopc-service-win-x64
-          path: publish/service
+          name: sismopc-win-x64
+          path: publish

@@ -9,6 +9,7 @@
     <PackageReference Include="System.Management" />
     <PackageReference Include="System.Diagnostics.PerformanceCounter" />
     <PackageReference Include="System.Diagnostics.EventLog" />
+    <PackageReference Include="LibreHardwareMonitorLib" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SismoPC.Core\SismoPC.Core.csproj" />

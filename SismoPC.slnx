@@ -4,6 +4,7 @@
     <Project Path="src/SismoPC.Data/SismoPC.Data.csproj" />
     <Project Path="src/SismoPC.Collectors/SismoPC.Collectors.csproj" />
     <Project Path="src/SismoPC.Service/SismoPC.Service.csproj" />
+    <Project Path="src/SismoPC.Notifier/SismoPC.Notifier.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SismoPC.Core.Tests/SismoPC.Core.Tests.csproj" />
