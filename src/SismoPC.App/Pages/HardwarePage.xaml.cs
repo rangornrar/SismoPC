@@ -11,7 +11,7 @@ namespace SismoPC.Ui.Pages;
 /// <summary>Matériel : inventaire complet et santé par composant, copie de l'inventaire (US1, US6).</summary>
 public sealed partial class HardwarePage : Page
 {
-    private static readonly string[] TypeOrder = ["Processeur", "Carte graphique", "Mémoire", "Carte mère", "BIOS", "Écran", "Réseau", "Système", "Disque"];
+    private static readonly string[] TypeOrder = ["Âge du PC", "Processeur", "Carte graphique", "Mémoire", "Carte mère", "BIOS", "Batterie", "Écran", "Réseau", "Système", "Disque"];
 
     public HardwarePage()
     {
@@ -47,8 +47,14 @@ public sealed partial class HardwarePage : Page
         header.Children.Add(copy);
         Root.Children.Add(header);
 
+        // L'âge du PC en tête, sur toute la largeur.
+        if (components.FirstOrDefault(c => c.Type == "Âge du PC") is { } age)
+        {
+            Root.Children.Add(ComponentCard(age));
+        }
+
         var cards = components
-            .Where(c => c.Type != "Disque")
+            .Where(c => c.Type != "Âge du PC")
             .OrderBy(c => Rank(c.Type))
             .Select(ComponentCard)
             .ToList<UIElement>();
@@ -81,7 +87,7 @@ public sealed partial class HardwarePage : Page
 
     private Border StorageCard(IReadOnlyList<HardwareComponent> drives, IReadOnlyList<DiskHealth> health)
     {
-        var panel = UiKit.Stack(10, UiKit.SectionTitle("Stockage"));
+        var panel = UiKit.Stack(10, UiKit.SectionTitle("Santé des disques et espace libre"));
 
         foreach (var disk in health)
         {

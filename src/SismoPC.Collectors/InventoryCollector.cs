@@ -17,25 +17,61 @@ public static class InventoryCollector
     private const string DisplayClassKey = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
     private static readonly CultureInfo Fr = CultureInfo.GetCultureInfo("fr-FR");
 
-    public static IReadOnlyList<HardwareComponent> Read()
+    /// <param name="onError">Appelé quand une famille échoue (journal du service) ; les autres familles continuent.</param>
+    public static IReadOnlyList<HardwareComponent> Read(Action<string, Exception>? onError = null)
     {
         var list = new List<HardwareComponent>();
-        list.AddRange(Processors());
-        list.AddRange(GraphicsCards());
-        list.AddRange(MemorySticks());
-        list.AddRange(Disks());
-        list.AddRange(Motherboard());
-        list.AddRange(Bios());
-        list.AddRange(Monitors());
-        list.AddRange(NetworkAdapters());
-        list.AddRange(WindowsInfo());
+        var clues = new List<DateClue>();
+
+        void Family(string name, Func<IEnumerable<HardwareComponent>> read)
+        {
+            try
+            {
+                list.AddRange(read().ToList());
+            }
+#pragma warning disable CA1031 // Une famille illisible ne doit pas empêcher l'inventaire des autres.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                onError?.Invoke(name, ex);
+            }
+        }
+
+        Family("Processeur", Processors);
+        Family("Carte graphique", GraphicsCards);
+        Family("Mémoire", MemorySticks);
+        Family("Disque", () => Disks(clues));
+        Family("Carte mère", Motherboard);
+        Family("BIOS", () => Bios(clues));
+        Family("Batterie", () => Battery(clues));
+        Family("Écran", () => Monitors(clues));
+        Family("Réseau", NetworkAdapters);
+        Family("Système", () => WindowsInfo(clues));
+        list.Add(AgeComponent(clues));
         return list;
+    }
+
+    /// <summary>« Âge du PC » : synthèse prudente et liste des indices, du plus ancien au plus récent.</summary>
+    private static HardwareComponent AgeComponent(List<DateClue> clues)
+    {
+        var d = new Details();
+        foreach (var clue in clues.OrderBy(c => c.Date))
+        {
+            d.Add(clue.Label, $"{clue.Date.ToString("d MMMM yyyy", Fr)} — {clue.Explanation}");
+        }
+
+        if (clues.Count == 0)
+        {
+            d.Add("Indices", "Aucun indice de date lisible sur ce PC.");
+        }
+
+        return new HardwareComponent("Âge du PC", PcAge.Summary(clues, DateTime.Now), d.Values);
     }
 
     private static IEnumerable<HardwareComponent> Processors()
     {
         foreach (var cpu in WmiHelper.Query(Cimv2,
-            "SELECT Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L2CacheSize, L3CacheSize, SocketDesignation, VirtualizationFirmwareEnabled FROM Win32_Processor"))
+            "SELECT Name, Caption, Manufacturer, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L2CacheSize, L3CacheSize, SocketDesignation, VirtualizationFirmwareEnabled FROM Win32_Processor"))
         {
             var d = new Details();
             d.Add("Fabricant", Vendor(cpu.Text("Manufacturer")));
@@ -44,6 +80,7 @@ public static class InventoryCollector
             d.Add("Cache L2", cpu.Long("L2CacheSize") is { } l2 and > 0 ? HardwareNames.Bytes(l2 * 1024.0) : null);
             d.Add("Cache L3", cpu.Long("L3CacheSize") is { } l3 and > 0 ? HardwareNames.Bytes(l3 * 1024.0) : null);
             d.Add("Support", cpu.Text("SocketDesignation"));
+            d.Add("Identifiant", cpu.Text("Caption"));
             d.Add("Virtualisation", cpu.Text("VirtualizationFirmwareEnabled") switch
             {
                 "True" => "Activée dans le BIOS",
@@ -56,23 +93,57 @@ public static class InventoryCollector
 
     private static IEnumerable<HardwareComponent> GraphicsCards()
     {
-        var vram = VideoMemoryFromRegistry();
+        IReadOnlyList<DxgiAdapter> dxgi;
+        try
+        {
+            dxgi = Dxgi.Adapters();
+        }
+#pragma warning disable CA1031 // DirectX indisponible (session sans affichage) : on passe aux autres sources.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            dxgi = [];
+        }
+
+        var registry = VideoMemoryFromRegistry();
         foreach (var gpu in WmiHelper.Query(Cimv2,
-            "SELECT Name, AdapterCompatibility, DriverVersion, DriverDate, AdapterRAM, VideoProcessor, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate FROM Win32_VideoController"))
+            "SELECT Name, AdapterCompatibility, DriverVersion, DriverDate, AdapterRAM, PNPDeviceID, VideoProcessor, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate FROM Win32_VideoController"))
         {
             var name = gpu.Text("Name");
-            var d = new Details();
-            d.Add("Marque", Vendor(gpu.Text("AdapterCompatibility")));
+            var pci = HardwareNames.ParsePciId(gpu.Text("PNPDeviceID"));
+            var dx = pci is { } p
+                ? dxgi.FirstOrDefault(a => a.VendorId == p.Vendor && a.DeviceId == p.Device)
+                : dxgi.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
 
-            // AdapterRAM (WMI) plafonne à 4 Go : la valeur exacte est lue dans le registre du pilote.
-            var memory = vram.TryGetValue(name, out var bytes) ? bytes : gpu.Long("AdapterRAM");
-            d.Add("Mémoire vidéo", memory is > 0 ? HardwareNames.Bytes(memory.Value) : null);
+            var d = new Details();
+            var chipVendor = pci is { } c ? HardwareNames.PciVendor(c.Vendor) : null;
+            d.Add("Marque de la puce", chipVendor ?? Vendor(gpu.Text("AdapterCompatibility")));
+            if (pci is { SubsystemVendor: > 0 } sub)
+            {
+                var boardMaker = HardwareNames.PciVendor(sub.SubsystemVendor);
+                d.Add("Fabricant de la carte", sub.SubsystemVendor == sub.Vendor
+                    ? $"{chipVendor} (modèle de référence)"
+                    : boardMaker ?? $"Code fabricant {sub.SubsystemVendor:X4}");
+            }
+
+            // Mémoire vidéo : DirectX d'abord (exacte), puis registre du pilote, puis WMI (plafonnée à 4 Go).
+            long? memory = dx is { DedicatedVideoMemory: > 0 } ? (long?)dx.DedicatedVideoMemory : null;
+            memory ??= registry.TryGetValue(name, out var fromRegistry) ? (long?)fromRegistry : null;
+            memory ??= gpu.Long("AdapterRAM") is { } ram and > 0 ? (long?)ram : null;
+            d.Add("Mémoire vidéo", memory is { } bytes ? HardwareNames.Bytes(bytes) : "Non communiquée par le pilote");
+
+            d.Add("Puce", gpu.Text("VideoProcessor"));
             d.Add("Pilote", gpu.Text("DriverVersion"));
             d.Add("Date du pilote", CimDate(gpu.Text("DriverDate")));
             if (gpu.Long("CurrentHorizontalResolution") is { } w and > 0 && gpu.Long("CurrentVerticalResolution") is { } h and > 0)
             {
                 var hz = gpu.Long("CurrentRefreshRate") is { } r and > 1 ? $" à {r} Hz" : string.Empty;
                 d.Add("Affichage", $"{w} × {h}{hz}");
+            }
+
+            if (pci is { } ids)
+            {
+                d.Add("Identifiant PCI", $"{ids.Vendor:X4}:{ids.Device:X4}");
             }
 
             yield return new("Carte graphique", name, d.Values);
@@ -156,23 +227,44 @@ public static class InventoryCollector
         yield return new("Mémoire", name, d.Values);
     }
 
-    private static IEnumerable<HardwareComponent> Disks()
+    private static IEnumerable<HardwareComponent> Disks(List<DateClue> clues)
     {
         const string storage = @"root\Microsoft\Windows\Storage";
-        var physical = WmiHelper.Query(storage, "SELECT FriendlyName, BusType, MediaType, Size, FirmwareVersion, SpindleSpeed FROM MSFT_PhysicalDisk");
-        if (physical.Count > 0)
+        var reliability = WmiHelper.Query(storage, "SELECT DeviceId, PowerOnHours, StartStopCycleCount FROM MSFT_StorageReliabilityCounter")
+            .GroupBy(r => r.Text("DeviceId"), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var physical = WmiHelper.Query(storage, "SELECT DeviceId, FriendlyName, BusType, MediaType, Size, FirmwareVersion, SpindleSpeed FROM MSFT_PhysicalDisk");
+        var now = DateTime.Now;
+
+        foreach (var disk in physical)
         {
-            foreach (var disk in physical)
+            var name = disk.Text("FriendlyName");
+            var d = new Details();
+            d.Add("Marque", HardwareNames.DiskBrand(name));
+            d.Add("Capacité", disk.Long("Size") is { } size and > 0 ? HardwareNames.DiskSize(size) : null);
+            d.Add("Type", HardwareNames.DiskMedia(disk.Long("MediaType")));
+            d.Add("Interface", HardwareNames.DiskBus(disk.Long("BusType")));
+            d.Add("Vitesse de rotation", disk.Long("SpindleSpeed") is { } rpm and > 0 and < 100000 ? $"{rpm} tr/min" : null);
+            d.Add("Micrologiciel", disk.Text("FirmwareVersion"));
+
+            if (reliability.TryGetValue(disk.Text("DeviceId"), out var r))
             {
-                var d = new Details();
-                d.Add("Capacité", disk.Long("Size") is { } size and > 0 ? HardwareNames.DiskSize(size) : null);
-                d.Add("Type", HardwareNames.DiskMedia(disk.Long("MediaType")));
-                d.Add("Interface", HardwareNames.DiskBus(disk.Long("BusType")));
-                d.Add("Vitesse de rotation", disk.Long("SpindleSpeed") is { } rpm and > 0 and < 100000 ? $"{rpm} tr/min" : null);
-                d.Add("Micrologiciel", disk.Text("FirmwareVersion"));
-                yield return new("Disque", disk.Text("FriendlyName"), d.Values);
+                if (r.Long("PowerOnHours") is { } hours and > 0)
+                {
+                    var since = PcAge.FromPowerOnHours(hours, now);
+                    d.Add("Utilisation", string.Format(Fr, "{0:N0} heures allumé (soit {1} en continu)", hours, PcAge.AgeText(since, now)));
+                    clues.Add(new DateClue($"Disque {name}", since, DateClueKind.InUseSince,
+                        string.Format(Fr, "{0:N0} h de fonctionnement : en service au plus tard à cette date (si le disque n'a pas servi dans un autre PC)", hours)));
+                }
+
+                d.Add("Mises sous tension", r.Long("StartStopCycleCount") is { } cycles and > 0 ? cycles.ToString("N0", Fr) : null);
             }
 
+            yield return new("Disque", name, d.Values);
+        }
+
+        if (physical.Count > 0)
+        {
             yield break;
         }
 
@@ -180,6 +272,7 @@ public static class InventoryCollector
         foreach (var disk in WmiHelper.Query(Cimv2, "SELECT Model, Size, InterfaceType FROM Win32_DiskDrive"))
         {
             var d = new Details();
+            d.Add("Marque", HardwareNames.DiskBrand(disk.Text("Model")));
             d.Add("Capacité", disk.Long("Size") is { } size and > 0 ? HardwareNames.DiskSize(size) : null);
             d.Add("Interface", disk.Text("InterfaceType"));
             yield return new("Disque", disk.Text("Model"), d.Values);
@@ -221,10 +314,16 @@ public static class InventoryCollector
         }
     }
 
-    private static IEnumerable<HardwareComponent> Bios()
+    private static IEnumerable<HardwareComponent> Bios(List<DateClue> clues)
     {
         foreach (var bios in WmiHelper.Query(Cimv2, "SELECT Manufacturer, SMBIOSBIOSVersion, ReleaseDate, SMBIOSMajorVersion, SMBIOSMinorVersion FROM Win32_BIOS"))
         {
+            if (TryCimDate(bios.Text("ReleaseDate")) is { } released)
+            {
+                clues.Add(new DateClue($"BIOS {bios.Text("SMBIOSBIOSVersion")}", released, DateClueKind.Firmware,
+                    "publication de la version installée : le PC a été fabriqué vers cette date si le BIOS n'a jamais été mis à jour"));
+            }
+
             var d = new Details();
             d.Add("Fabricant", bios.Text("Manufacturer"));
             d.Add("Version", bios.Text("SMBIOSBIOSVersion"));
@@ -275,7 +374,7 @@ public static class InventoryCollector
         return $"TPM {version}{(enabled ? ", active" : ", inactive")}";
     }
 
-    private static IEnumerable<HardwareComponent> Monitors()
+    private static IEnumerable<HardwareComponent> Monitors(List<DateClue> clues)
     {
         const string wmi = @"root\wmi";
         var sizes = WmiHelper.Query(wmi, "SELECT InstanceName, MaxHorizontalImageSize, MaxVerticalImageSize FROM WmiMonitorBasicDisplayParams")
@@ -283,7 +382,7 @@ public static class InventoryCollector
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var index = 1;
-        foreach (var monitor in WmiHelper.Query(wmi, "SELECT InstanceName, ManufacturerName, UserFriendlyName, YearOfManufacture FROM WmiMonitorID"))
+        foreach (var monitor in WmiHelper.Query(wmi, "SELECT InstanceName, ManufacturerName, UserFriendlyName, YearOfManufacture, WeekOfManufacture FROM WmiMonitorID"))
         {
             var model = HardwareNames.EdidText(monitor.TryGetValue("UserFriendlyName", out var n) ? n as ushort[] : null);
             var brand = HardwareNames.MonitorBrand(HardwareNames.EdidText(monitor.TryGetValue("ManufacturerName", out var m) ? m as ushort[] : null));
@@ -295,8 +394,15 @@ public static class InventoryCollector
                 d.Add("Taille", string.Format(Fr, "{0:0} pouces ({1} × {2} cm)", inches, size.Text("MaxHorizontalImageSize"), size.Text("MaxVerticalImageSize")));
             }
 
-            d.Add("Année de fabrication", monitor.Long("YearOfManufacture") is { } year and > 1990 ? year.ToString(CultureInfo.InvariantCulture) : null);
             var name = string.IsNullOrWhiteSpace(model) ? $"Écran {index}" : model;
+            var year = monitor.Long("YearOfManufacture");
+            var week = monitor.Long("WeekOfManufacture");
+            if (HardwareNames.WeekToDate(year, week) is { } made)
+            {
+                d.Add("Fabrication", week is >= 1 and <= 53 ? $"semaine {week} de {year}" : $"{year}");
+                clues.Add(new DateClue($"Écran {name}", made, DateClueKind.Manufactured, "fabrication de l'écran (il peut être plus ancien ou plus récent que le PC)"));
+            }
+
             yield return new("Écran", name, d.Values);
             index++;
         }
@@ -322,7 +428,7 @@ public static class InventoryCollector
         }
     }
 
-    private static IEnumerable<HardwareComponent> WindowsInfo()
+    private static IEnumerable<HardwareComponent> WindowsInfo(List<DateClue> clues)
     {
         string? displayVersion = null;
         string? build = null;
@@ -343,6 +449,12 @@ public static class InventoryCollector
         foreach (var os in WmiHelper.Query(Cimv2, "SELECT Caption, Version, BuildNumber, OSArchitecture, InstallDate, LastBootUpTime FROM Win32_OperatingSystem"))
         {
             var caption = os.Text("Caption").Replace("Microsoft ", string.Empty, StringComparison.Ordinal);
+            if (TryCimDate(os.Text("InstallDate")) is { } installed)
+            {
+                clues.Add(new DateClue("Installation de Windows", installed, DateClueKind.InUseSince,
+                    "remise à jour par les grandes mises à jour de Windows : le PC peut être plus ancien"));
+            }
+
             var d = new Details();
             d.Add("Version", displayVersion);
             d.Add("Build", build ?? os.Text("BuildNumber"));
@@ -354,7 +466,60 @@ public static class InventoryCollector
         }
     }
 
+    private static IEnumerable<HardwareComponent> Battery(List<DateClue> clues)
+    {
+        if (WmiHelper.Query(Cimv2, "SELECT Name FROM Win32_Battery").Count == 0)
+        {
+            yield break; // PC de bureau.
+        }
+
+        const string wmi = @"root\wmi";
+        var full = WmiHelper.Query(wmi, "SELECT FullChargedCapacity FROM BatteryFullChargedCapacity").FirstOrDefault()?.Long("FullChargedCapacity");
+        var cycles = WmiHelper.Query(wmi, "SELECT CycleCount FROM BatteryCycleCount").FirstOrDefault()?.Long("CycleCount");
+        foreach (var battery in WmiHelper.Query(wmi, "SELECT DeviceName, ManufactureName, DesignedCapacity, ManufactureDate FROM BatteryStaticData"))
+        {
+            var d = new Details();
+            d.Add("Fabricant", battery.Text("ManufactureName"));
+            var design = battery.Long("DesignedCapacity");
+            d.Add("Capacité d'origine", design is > 0 ? string.Format(Fr, "{0:N0} mWh", design) : null);
+            d.Add("Capacité actuelle", full is > 0 ? string.Format(Fr, "{0:N0} mWh", full) : null);
+            if (design is > 0 && full is > 0)
+            {
+                var health = 100.0 * full.Value / design.Value;
+                d.Add("Santé", string.Format(Fr, "{0:0} % de la capacité d'origine", Math.Min(100, health)));
+            }
+
+            d.Add("Cycles de charge", cycles is > 0 ? cycles.Value.ToString("N0", Fr) : null);
+            if (TryCimDate(battery.Text("ManufactureDate")) is { } made)
+            {
+                d.Add("Fabrication", made.ToString("d MMMM yyyy", Fr));
+                clues.Add(new DateClue("Batterie", made, DateClueKind.Manufactured, "fabrication de la batterie (d'origine si elle n'a jamais été changée)"));
+            }
+
+            var name = battery.Text("DeviceName");
+            yield return new("Batterie", string.IsNullOrWhiteSpace(name) ? "Batterie" : name, d.Values);
+        }
+    }
+
     // ---------- Outils ----------
+
+    private static DateTime? TryCimDate(string cim)
+    {
+        if (string.IsNullOrWhiteSpace(cim))
+        {
+            return null;
+        }
+
+        try
+        {
+            var date = ManagementDateTimeConverter.ToDateTime(cim);
+            return date.Year is >= 1990 and <= 2100 ? date : null;
+        }
+        catch (Exception ex) when (ex is ArgumentOutOfRangeException or FormatException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>Noms de fabricants harmonisés (WMI renvoie souvent des raisons sociales ou des identifiants).</summary>
     private static string Vendor(string raw)

@@ -261,7 +261,7 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
     private void RefreshInventory(DateTimeOffset now)
     {
         _lastInventory = now;
-        _store!.UpsertComponents(InventoryCollector.Read(), now);
+        _store!.UpsertComponents(InventoryCollector.Read((family, ex) => LogInventoryFailed(logger, family, ex)), now);
     }
 
     private void RefreshDisks(DateTimeOffset now)
@@ -312,6 +312,9 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
 
     [LoggerMessage(Level = LogLevel.Information, Message = "SismoPC démarré, base {Database}, températures disponibles : {Temperatures}")]
     private static partial void LogStarted(ILogger logger, string database, bool temperatures);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Inventaire : lecture impossible de la famille {Family}")]
+    private static partial void LogInventoryFailed(ILogger logger, string family, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "SismoPC arrêté")]
     private static partial void LogStopped(ILogger logger);

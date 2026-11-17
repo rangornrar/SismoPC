@@ -109,6 +109,94 @@ public static class HardwareNames
         ? string.Format(Fr, "{0:0.#} Gbit/s", bitsPerSecond / 1e9)
         : string.Format(Fr, "{0:0} Mbit/s", bitsPerSecond / 1e6);
 
+    /// <summary>
+    /// Fabricant d'après un identifiant de vendeur PCI. Pour une carte graphique, le vendeur du sous-système
+    /// est le fabricant de la carte (Asus, MSI…), le vendeur de la puce étant NVIDIA, AMD ou Intel.
+    /// </summary>
+    public static string? PciVendor(uint vendorId) => vendorId switch
+    {
+        0x10DE => "NVIDIA",
+        0x1002 => "AMD",
+        0x8086 => "Intel",
+        0x1043 => "Asus",
+        0x1462 => "MSI",
+        0x1458 => "Gigabyte",
+        0x3842 => "EVGA",
+        0x19DA => "Zotac",
+        0x174B or 0x1DA2 => "Sapphire",
+        0x196E => "PNY",
+        0x1569 => "Palit",
+        0x10B0 => "Gainward",
+        0x1B4C => "KFA2 / Galax",
+        0x7377 => "Colorful",
+        0x1849 => "ASRock",
+        0x1682 => "XFX",
+        0x148C => "PowerColor",
+        0x1028 => "Dell",
+        0x103C => "HP",
+        0x17AA => "Lenovo",
+        0x1025 => "Acer",
+        0x144D => "Samsung",
+        0x1414 => "Microsoft",
+        _ => null,
+    };
+
+    /// <summary>
+    /// Lit vendeur, puce et vendeur du sous-système dans un identifiant PnP, par exemple
+    /// « PCI\VEN_10DE&amp;DEV_2484&amp;SUBSYS_146210DE&amp;REV_A1\… » → (0x10DE, 0x2484, 0x10DE).
+    /// Dans SUBSYS_ddddvvvv, les 4 derniers chiffres sont le vendeur du sous-système.
+    /// </summary>
+    public static (uint Vendor, uint Device, uint SubsystemVendor)? ParsePciId(string? pnpDeviceId)
+    {
+        if (string.IsNullOrEmpty(pnpDeviceId))
+        {
+            return null;
+        }
+
+        static uint? Hex(string id, string key, int start, int length)
+        {
+            var i = id.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+            return i >= 0 && i + key.Length + start + length <= id.Length
+                   && uint.TryParse(id.AsSpan(i + key.Length + start, length), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var v)
+                ? v
+                : null;
+        }
+
+        var ven = Hex(pnpDeviceId, "VEN_", 0, 4);
+        var dev = Hex(pnpDeviceId, "DEV_", 0, 4);
+        var sub = Hex(pnpDeviceId, "SUBSYS_", 4, 4);
+        return ven is null || dev is null ? null : (ven.Value, dev.Value, sub ?? 0);
+    }
+
+    /// <summary>Marque d'un disque d'après le début de son nom de modèle.</summary>
+    public static string? DiskBrand(string model)
+    {
+        var m = model.Trim().ToUpperInvariant();
+        (string Prefix, string Brand)[] prefixes =
+        [
+            ("SAMSUNG", "Samsung"), ("WDC", "Western Digital"), ("WD", "Western Digital"), ("WESTERN DIGITAL", "Western Digital"),
+            ("ST", "Seagate"), ("SEAGATE", "Seagate"), ("CT", "Crucial"), ("CRUCIAL", "Crucial"), ("MICRON", "Micron"),
+            ("KINGSTON", "Kingston"), ("SKHYNIX", "SK hynix"), ("SK HYNIX", "SK hynix"), ("HFS", "SK hynix"),
+            ("TOSHIBA", "Toshiba"), ("KIOXIA", "Kioxia"), ("INTEL", "Intel"), ("SANDISK", "SanDisk"),
+            ("CORSAIR", "Corsair"), ("SABRENT", "Sabrent"), ("ADATA", "ADATA"), ("XPG", "ADATA"), ("PNY", "PNY"),
+            ("TEAM", "Teamgroup"), ("LEXAR", "Lexar"), ("HGST", "HGST"), ("HITACHI", "Hitachi"), ("NETAC", "Netac"),
+        ];
+        return prefixes.FirstOrDefault(p => m.StartsWith(p.Prefix, StringComparison.Ordinal)).Brand;
+    }
+
+    /// <summary>Premier jour (lundi) d'une semaine de fabrication EDID, pour dater un écran.</summary>
+    public static DateTime? WeekToDate(long? year, long? week)
+    {
+        if (year is not (>= 1990 and <= 2100))
+        {
+            return null;
+        }
+
+        return week is >= 1 and <= 53
+            ? ISOWeek.ToDateTime((int)year.Value, (int)Math.Min(week.Value, ISOWeek.GetWeeksInYear((int)year.Value)), DayOfWeek.Monday)
+            : new DateTime((int)year.Value, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+    }
+
     /// <summary>Texte d'un tableau de caractères EDID (UserFriendlyName, ManufacturerName de WmiMonitorID).</summary>
     public static string EdidText(IEnumerable<ushort>? chars) =>
         chars is null ? string.Empty : new string(chars.TakeWhile(c => c != 0).Select(c => (char)c).ToArray()).Trim();
