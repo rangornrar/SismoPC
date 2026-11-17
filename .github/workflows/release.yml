@@ -1,9 +1,12 @@
 name: Release
 
-# Une version publiée = un tag « vX.Y.Z » poussé sur GitHub.
+# Une version publiée = un tag « vX.Y.Z » poussé sur GitHub,
+# ou un envoi sur la branche « release » : la version est alors lue dans Directory.Build.props
+# et le tag vX.Y.Z est créé par la release.
 on:
   push:
     tags: ['v*']
+    branches: [release]
 
 permissions:
   contents: write
@@ -22,8 +25,13 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $v = '${{ github.ref_name }}'.TrimStart('v')
+          if ('${{ github.ref_type }}' -eq 'tag') {
+            $v = '${{ github.ref_name }}'.TrimStart('v')
+          } else {
+            $v = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          }
           "version=$v" >> $env:GITHUB_OUTPUT
+          "tag=v$v" >> $env:GITHUB_OUTPUT
 
       - name: Tests
         run: dotnet test SismoPC.slnx --configuration Release
@@ -52,5 +60,5 @@ jobs:
           $extra = @()
           if ($v.StartsWith('0.')) { $extra += '--prerelease' }
           $files = @(Get-ChildItem artifacts -Filter *.exe | ForEach-Object FullName) + 'artifacts/SHA256SUMS.txt'
-          gh release create '${{ github.ref_name }}' @files --title "SismoPC $v" --notes $notes @extra
+          gh release create '${{ steps.version.outputs.tag }}' @files --target '${{ github.sha }}' --title "SismoPC $v" --notes $notes @extra
           if ($LASTEXITCODE -ne 0) { throw 'Échec de la création de la release' }

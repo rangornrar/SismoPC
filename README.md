@@ -42,7 +42,7 @@ dotnet test SismoPC.slnx
 ```
 
 Chaque envoi sur `main` est compilé et testé par GitHub Actions, qui produit aussi un installeur de développement.
-Une version publiée se fait en poussant un tag `vX.Y.Z` : `build/package.ps1` construit l'installeur (Inno Setup) et la release GitHub est créée.
+Une version publiée se fait en poussant un tag `vX.Y.Z`, ou en envoyant `main` sur la branche `release` (version lue dans `Directory.Build.props`) : `build/package.ps1` construit l'installeur (Inno Setup) et la release GitHub est créée.
 
 ## Licences tierces
 
