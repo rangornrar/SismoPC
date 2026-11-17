@@ -48,7 +48,7 @@ public static class Palette
 }
 
 /// <summary>Petits constructeurs d'éléments d'interface, pour garder les pages lisibles.</summary>
-public static class Ui
+public static class UiKit
 {
     public static readonly CultureInfo Fr = CultureInfo.GetCultureInfo("fr-FR");
 

@@ -19,7 +19,7 @@ public sealed partial class SettingsPage : Page
     {
         base.OnNavigatedTo(e);
         Root.Children.Clear();
-        Root.Children.Add(Ui.Header("Paramètres", "Réglages de la collecte, de la détection et des alertes"));
+        Root.Children.Add(UiKit.Header("Paramètres", "Réglages de la collecte, de la détection et des alertes"));
 
         var statusTask = ServiceClient.GetStatusAsync();
         var settings = await DataAccess.ReadAsync(store => (
@@ -28,8 +28,8 @@ public sealed partial class SettingsPage : Page
             Size: store.DatabaseSizeBytes()));
         var status = await statusTask;
 
-        var left = Ui.Stack(20, ServiceCard(status), DetectionCard(status), ScoreCard());
-        var right = Ui.Stack(20,
+        var left = UiKit.Stack(20, ServiceCard(status), DetectionCard(status), ScoreCard());
+        var right = UiKit.Stack(20,
             NotificationsCard(settings.Anomaly != "false", settings.Slowdown == "true", status is not null),
             RetentionCard(settings.Size));
         var grid = new Grid { ColumnSpacing = 20 };
@@ -44,19 +44,19 @@ public sealed partial class SettingsPage : Page
     private Border ServiceCard(LiveStatus? status)
     {
         var state = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-        state.Children.Add(Ui.Pill(status is null ? "Ne répond pas" : "Actif", status is null ? Status.Critical : Status.Good, this));
-        var panel = Ui.Stack(10, Ui.SectionTitle("Service de collecte"), state);
-        panel.Children.Add(Ui.Text(status is null
+        state.Children.Add(UiKit.Pill(status is null ? "Ne répond pas" : "Actif", status is null ? Status.Critical : Status.Good, this));
+        var panel = UiKit.Stack(10, UiKit.SectionTitle("Service de collecte"), state);
+        panel.Children.Add(UiKit.Text(status is null
             ? "Le service SismoPC ne répond pas. Il démarre normalement avec Windows."
             : "Démarre avec Windows et enregistre toutes les 5 secondes, même sans session ouverte.", secondary: true));
         if (status is { TemperaturesAvailable: false })
         {
-            panel.Children.Add(Ui.Banner("Températures indisponibles",
+            panel.Children.Add(UiKit.Banner("Températures indisponibles",
                 "La lecture des capteurs nécessite le pilote PawnIO, proposé par l'installeur de SismoPC.",
                 InfoBarSeverity.Informational));
         }
 
-        return Ui.Card(panel);
+        return UiKit.Card(panel);
     }
 
     private static Border DetectionCard(LiveStatus? status)
@@ -64,45 +64,45 @@ public sealed partial class SettingsPage : Page
         var learning = status switch
         {
             null => "—",
-            { Learning: true } => $"En cours, jusqu'au {status.LearningEndsAt.ToLocalTime().ToString("d MMMM", Ui.Fr)}",
-            _ => $"Terminé le {status.LearningEndsAt.ToLocalTime().ToString("d MMMM", Ui.Fr)}",
+            { Learning: true } => $"En cours, jusqu'au {status.LearningEndsAt.ToLocalTime().ToString("d MMMM", UiKit.Fr)}",
+            _ => $"Terminé le {status.LearningEndsAt.ToLocalTime().ToString("d MMMM", UiKit.Fr)}",
         };
 
-        return Ui.Card(Ui.Stack(10,
-            Ui.SectionTitle("Détection"),
-            Ui.Field("Seuil de saturation", "90 % (processeur, disque, mémoire) ou 50 ms de latence disque"),
-            Ui.Field("Durée minimale", "30 s pour un ralentissement, 5 min pour une anomalie"),
-            Ui.Field("Apprentissage", learning),
-            Ui.Text("Ces seuils seront réglables dans une prochaine version.", "CaptionTextBlockStyle", secondary: true)));
+        return UiKit.Card(UiKit.Stack(10,
+            UiKit.SectionTitle("Détection"),
+            UiKit.Field("Seuil de saturation", "90 % (processeur, disque, mémoire) ou 50 ms de latence disque"),
+            UiKit.Field("Durée minimale", "30 s pour un ralentissement, 5 min pour une anomalie"),
+            UiKit.Field("Apprentissage", learning),
+            UiKit.Text("Ces seuils seront réglables dans une prochaine version.", "CaptionTextBlockStyle", secondary: true)));
     }
 
     private static Border ScoreCard()
     {
-        var panel = Ui.Stack(8, Ui.SectionTitle("Calcul du score de santé"),
-            Ui.Text("100 points, moins les pénalités suivantes. Le score n'est jamais négatif.", secondary: true));
-        panel.Children.Add(Ui.Field("Alerte critique", $"−{HealthScoreCalculator.CriticalAlertPoints} chacune"));
-        panel.Children.Add(Ui.Field("Alerte « attention »", $"−{HealthScoreCalculator.WarningAlertPoints} chacune"));
-        panel.Children.Add(Ui.Field("Anomalie en cours", $"−{HealthScoreCalculator.AnomalyPoints} chacune"));
-        panel.Children.Add(Ui.Field("Ralentissement (7 jours)", $"−{HealthScoreCalculator.SlowdownPoints}, au plus −{HealthScoreCalculator.SlowdownCap}"));
-        panel.Children.Add(Ui.Field("Indicateur dégradé de plus de 20 %", $"−{HealthScoreCalculator.DegradedTrendPoints} chacun"));
-        panel.Children.Add(Ui.Text("Pendant l'apprentissage, seules les alertes matérielles comptent.", "CaptionTextBlockStyle", secondary: true));
-        return Ui.Card(panel);
+        var panel = UiKit.Stack(8, UiKit.SectionTitle("Calcul du score de santé"),
+            UiKit.Text("100 points, moins les pénalités suivantes. Le score n'est jamais négatif.", secondary: true));
+        panel.Children.Add(UiKit.Field("Alerte critique", $"−{HealthScoreCalculator.CriticalAlertPoints} chacune"));
+        panel.Children.Add(UiKit.Field("Alerte « attention »", $"−{HealthScoreCalculator.WarningAlertPoints} chacune"));
+        panel.Children.Add(UiKit.Field("Anomalie en cours", $"−{HealthScoreCalculator.AnomalyPoints} chacune"));
+        panel.Children.Add(UiKit.Field("Ralentissement (7 jours)", $"−{HealthScoreCalculator.SlowdownPoints}, au plus −{HealthScoreCalculator.SlowdownCap}"));
+        panel.Children.Add(UiKit.Field("Indicateur dégradé de plus de 20 %", $"−{HealthScoreCalculator.DegradedTrendPoints} chacun"));
+        panel.Children.Add(UiKit.Text("Pendant l'apprentissage, seules les alertes matérielles comptent.", "CaptionTextBlockStyle", secondary: true));
+        return UiKit.Card(panel);
     }
 
     private static Border NotificationsCard(bool anomalies, bool slowdowns, bool serviceAvailable)
     {
-        var panel = Ui.Stack(6, Ui.SectionTitle("Notifications"));
-        panel.Children.Add(Ui.Text("Les alertes matérielles (température, risque de panne, usure, espace disque) sont toujours notifiées.", secondary: true));
+        var panel = UiKit.Stack(6, UiKit.SectionTitle("Notifications"));
+        panel.Children.Add(UiKit.Text("Les alertes matérielles (température, risque de panne, usure, espace disque) sont toujours notifiées.", secondary: true));
         panel.Children.Add(Toggle("Anomalies", "Comportement inhabituel pour ce PC", SettingKeys.NotifyAnomaly, anomalies, serviceAvailable));
         panel.Children.Add(Toggle("Ralentissements", "Une notification au plus par heure", SettingKeys.NotifySlowdown, slowdowns, serviceAvailable));
-        return Ui.Card(panel);
+        return UiKit.Card(panel);
     }
 
     private static ToggleSwitch Toggle(string header, string description, string key, bool isOn, bool enabled)
     {
         var toggle = new ToggleSwitch
         {
-            Header = Ui.Stack(0, Ui.Text(header), Ui.Text(description, "CaptionTextBlockStyle", secondary: true)),
+            Header = UiKit.Stack(0, UiKit.Text(header), UiKit.Text(description, "CaptionTextBlockStyle", secondary: true)),
             IsOn = isOn,
             IsEnabled = enabled,
         };
@@ -125,11 +125,11 @@ public sealed partial class SettingsPage : Page
         return toggle;
     }
 
-    private static Border RetentionCard(long sizeBytes) => Ui.Card(Ui.Stack(10,
-        Ui.SectionTitle("Conservation de l'historique"),
-        Ui.Field("Détail (toutes les 5 s)", "7 jours"),
-        Ui.Field("Résumé à la minute", "90 jours"),
-        Ui.Field("Résumé à l'heure", "2 ans"),
-        Ui.Field("Base de données", $"{DataAccess.DatabasePath} · {sizeBytes / 1e6:0} Mo"),
-        Ui.Text("Toutes les données restent sur ce PC. Rien n'est envoyé sur internet.", "CaptionTextBlockStyle", secondary: true)));
+    private static Border RetentionCard(long sizeBytes) => UiKit.Card(UiKit.Stack(10,
+        UiKit.SectionTitle("Conservation de l'historique"),
+        UiKit.Field("Détail (toutes les 5 s)", "7 jours"),
+        UiKit.Field("Résumé à la minute", "90 jours"),
+        UiKit.Field("Résumé à l'heure", "2 ans"),
+        UiKit.Field("Base de données", $"{DataAccess.DatabasePath} · {sizeBytes / 1e6:0} Mo"),
+        UiKit.Text("Toutes les données restent sur ce PC. Rien n'est envoyé sur internet.", "CaptionTextBlockStyle", secondary: true)));
 }

@@ -23,24 +23,24 @@ public sealed partial class TrendsPage : Page
 
         var trends = await DataAccess.ReadAsync(store => store.ReadTrends()) ?? [];
         var first = trends.SelectMany(t => t.Months).Select(m => m.Month).DefaultIfEmpty().Min();
-        Root.Children.Add(Ui.Header("Tendances", first is null
+        Root.Children.Add(UiKit.Header("Tendances", first is null
             ? "Évolution mois par mois : les premières valeurs apparaîtront après quelques jours de collecte."
             : $"Évolution mois par mois depuis {Trend.MonthLabel(first)} (premier mois de surveillance, en référence)"));
 
         var degraded = trends.Where(t => t.IsDegraded).ToList();
         if (degraded.Count > 0)
         {
-            Root.Children.Add(Ui.Banner(
+            Root.Children.Add(UiKit.Banner(
                 degraded.Count == 1 ? "1 indicateur s'est dégradé de plus de 20 %" : $"{degraded.Count} indicateurs se sont dégradés de plus de 20 %",
-                string.Join(", ", degraded.Select(t => t.Name.ToLower(Ui.Fr))),
+                string.Join(", ", degraded.Select(t => t.Name.ToLower(UiKit.Fr))),
                 InfoBarSeverity.Warning));
         }
 
         var cards = trends.Select((t, i) => TrendCard(t, i)).ToList<UIElement>();
-        cards.Add(Ui.Card(Ui.Stack(8,
-            Ui.SectionTitle("Capacité de la batterie"),
-            Ui.Text("Sur les portables, SismoPC suivra la capacité de la batterie par rapport à sa capacité d'origine. Mesure prévue dans une prochaine version.", secondary: true))));
-        Root.Children.Add(Ui.Columns(2, cards, 20));
+        cards.Add(UiKit.Card(UiKit.Stack(8,
+            UiKit.SectionTitle("Capacité de la batterie"),
+            UiKit.Text("Sur les portables, SismoPC suivra la capacité de la batterie par rapport à sa capacité d'origine. Mesure prévue dans une prochaine version.", secondary: true))));
+        Root.Children.Add(UiKit.Columns(2, cards, 20));
     }
 
     private Border TrendCard(Trend trend, int index)
@@ -49,21 +49,21 @@ public sealed partial class TrendsPage : Page
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var pill = Ui.Pill(trend.ChangeLabel, status, this);
+        var pill = UiKit.Pill(trend.ChangeLabel, status, this);
         Grid.SetColumn(pill, 1);
-        head.Children.Add(Ui.Text(trend.Name, "BodyStrongTextBlockStyle"));
+        head.Children.Add(UiKit.Text(trend.Name, "BodyStrongTextBlockStyle"));
         head.Children.Add(pill);
 
-        var panel = Ui.Stack(8, head);
+        var panel = UiKit.Stack(8, head);
         if (trend.Last is not { } last || trend.First is not { } firstMonth)
         {
-            panel.Children.Add(Ui.Text("Pas encore de mesure.", secondary: true));
-            return Ui.Card(panel);
+            panel.Children.Add(UiKit.Text("Pas encore de mesure.", secondary: true));
+            return UiKit.Card(panel);
         }
 
         var value = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        value.Children.Add(Ui.Text(Format(last.Value, trend.Unit), "TitleTextBlockStyle"));
-        var reference = Ui.Text($"en {Trend.MonthLabel(firstMonth.Month)} : {Format(firstMonth.Value, trend.Unit)}", secondary: true);
+        value.Children.Add(UiKit.Text(Format(last.Value, trend.Unit), "TitleTextBlockStyle"));
+        var reference = UiKit.Text($"en {Trend.MonthLabel(firstMonth.Month)} : {Format(firstMonth.Value, trend.Unit)}", secondary: true);
         reference.VerticalAlignment = VerticalAlignment.Bottom;
         value.Children.Add(reference);
         panel.Children.Add(value);
@@ -81,11 +81,11 @@ public sealed partial class TrendsPage : Page
             panel.Children.Add(chart);
         }
 
-        return Ui.Card(panel);
+        return UiKit.Card(panel);
     }
 
     private static string Format(double value, string unit) =>
         unit == "s" || unit == "°C" || unit == "%"
-            ? string.Format(Ui.Fr, "{0:0} {1}", value, unit)
-            : string.Format(Ui.Fr, "{0:0.0} {1}", value, unit);
+            ? string.Format(UiKit.Fr, "{0:0} {1}", value, unit)
+            : string.Format(UiKit.Fr, "{0:0.0} {1}", value, unit);
 }

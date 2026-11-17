@@ -41,7 +41,7 @@ public sealed partial class HardwarePage : Page
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(copy, 1);
         copy.VerticalAlignment = VerticalAlignment.Bottom;
-        header.Children.Add(Ui.Header("Matériel", components.Count == 0
+        header.Children.Add(UiKit.Header("Matériel", components.Count == 0
             ? "Inventaire pas encore disponible : le service ne l'a pas encore réalisé."
             : "Inventaire réalisé au démarrage du service SismoPC"));
         header.Children.Add(copy);
@@ -54,7 +54,7 @@ public sealed partial class HardwarePage : Page
             .ToList<UIElement>();
         if (cards.Count > 0)
         {
-            Root.Children.Add(Ui.Columns(2, cards, 20));
+            Root.Children.Add(UiKit.Columns(2, cards, 20));
         }
 
         Root.Children.Add(StorageCard(components.Where(c => c.Type == "Disque").ToList(), disks));
@@ -68,20 +68,20 @@ public sealed partial class HardwarePage : Page
 
     private static Border ComponentCard(HardwareComponent c)
     {
-        var panel = Ui.Stack(8,
-            Ui.Text(c.Type.ToUpper(Ui.Fr), "CaptionTextBlockStyle", secondary: true),
-            Ui.Text(c.Name, "SubtitleTextBlockStyle"));
+        var panel = UiKit.Stack(8,
+            UiKit.Text(c.Type.ToUpper(UiKit.Fr), "CaptionTextBlockStyle", secondary: true),
+            UiKit.Text(c.Name, "SubtitleTextBlockStyle"));
         foreach (var (label, value) in c.Details)
         {
-            panel.Children.Add(Ui.Field(label, value));
+            panel.Children.Add(UiKit.Field(label, value));
         }
 
-        return Ui.Card(panel);
+        return UiKit.Card(panel);
     }
 
     private Border StorageCard(IReadOnlyList<HardwareComponent> drives, IReadOnlyList<DiskHealth> health)
     {
-        var panel = Ui.Stack(10, Ui.SectionTitle("Stockage"));
+        var panel = UiKit.Stack(10, UiKit.SectionTitle("Stockage"));
 
         foreach (var disk in health)
         {
@@ -91,52 +91,52 @@ public sealed partial class HardwarePage : Page
             var label = state switch { Status.Critical => "Risque de panne", Status.Warning => "Usé", _ => "Bonne santé" };
 
             var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-            head.Children.Add(Ui.Text(disk.Name, "BodyStrongTextBlockStyle"));
-            head.Children.Add(Ui.Pill(label, state, this));
+            head.Children.Add(UiKit.Text(disk.Name, "BodyStrongTextBlockStyle"));
+            head.Children.Add(UiKit.Pill(label, state, this));
             panel.Children.Add(head);
-            panel.Children.Add(Ui.Field("Type", disk.IsSsd ? "SSD" : "Disque dur"));
+            panel.Children.Add(UiKit.Field("Type", disk.IsSsd ? "SSD" : "Disque dur"));
             if (model is not null && model.Details.TryGetValue("Capacité", out var size))
             {
-                panel.Children.Add(Ui.Field("Capacité", size));
+                panel.Children.Add(UiKit.Field("Capacité", size));
             }
 
             if (disk.WearPercent is { } wear)
             {
-                panel.Children.Add(Ui.Field("Usure", Ui.Percent(wear)));
+                panel.Children.Add(UiKit.Field("Usure", UiKit.Percent(wear)));
             }
 
             if (disk.TemperatureC is { } temp)
             {
-                panel.Children.Add(Ui.Field("Température", Ui.Celsius(temp)));
+                panel.Children.Add(UiKit.Field("Température", UiKit.Celsius(temp)));
             }
 
             if (disk.PowerOnHours is { } hours)
             {
-                panel.Children.Add(Ui.Field("Fonctionnement", $"{hours:N0} h".Replace(",", " ", StringComparison.Ordinal)));
+                panel.Children.Add(UiKit.Field("Fonctionnement", $"{hours:N0} h".Replace(",", " ", StringComparison.Ordinal)));
             }
         }
 
         if (health.Count == 0)
         {
-            panel.Children.Add(Ui.Text("L'état SMART des disques sera lu par le service (droits administrateur nécessaires).", secondary: true));
+            panel.Children.Add(UiKit.Text("L'état SMART des disques sera lu par le service (droits administrateur nécessaires).", secondary: true));
         }
 
-        panel.Children.Add(Ui.Text("Espace libre", "BodyStrongTextBlockStyle"));
+        panel.Children.Add(UiKit.Text("Espace libre", "BodyStrongTextBlockStyle"));
         foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
         {
             var free = 100.0 * drive.AvailableFreeSpace / drive.TotalSize;
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-            row.Children.Add(Ui.Field(drive.Name.TrimEnd('\\'),
-                $"{Ui.Gigabytes(drive.AvailableFreeSpace)} libres sur {Ui.Gigabytes(drive.TotalSize)} ({Ui.Percent(free)})"));
+            row.Children.Add(UiKit.Field(drive.Name.TrimEnd('\\'),
+                $"{UiKit.Gigabytes(drive.AvailableFreeSpace)} libres sur {UiKit.Gigabytes(drive.TotalSize)} ({UiKit.Percent(free)})"));
             if (free < 10)
             {
-                row.Children.Add(Ui.Pill("Attention", Status.Warning, this));
+                row.Children.Add(UiKit.Pill("Attention", Status.Warning, this));
             }
 
             panel.Children.Add(row);
         }
 
-        return Ui.Card(panel);
+        return UiKit.Card(panel);
     }
 
     private static string InventoryText(IReadOnlyList<HardwareComponent> components)

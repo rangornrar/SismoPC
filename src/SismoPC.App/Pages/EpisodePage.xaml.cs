@@ -28,7 +28,7 @@ public sealed partial class EpisodePage : Page
         Root.Children.Clear();
         if (e.Parameter is not long id)
         {
-            Root.Children.Add(Ui.Text("Épisode introuvable.", secondary: true));
+            Root.Children.Add(UiKit.Text("Épisode introuvable.", secondary: true));
             return;
         }
 
@@ -49,7 +49,7 @@ public sealed partial class EpisodePage : Page
 
         if (data is null)
         {
-            Root.Children.Add(Ui.Text("Cet épisode n'existe plus (ignoré ou effacé).", secondary: true));
+            Root.Children.Add(UiKit.Text("Cet épisode n'existe plus (ignoré ou effacé).", secondary: true));
             return;
         }
 
@@ -57,10 +57,10 @@ public sealed partial class EpisodePage : Page
         var isAnomaly = episode.Kind == EpisodeKind.Anomaly;
 
         var title = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-        title.Children.Add(Ui.Text(data.Episode.Title, "TitleTextBlockStyle"));
-        title.Children.Add(Ui.Pill(isAnomaly ? "Anomalie" : "Ralentissement", isAnomaly ? Status.Info : Status.Warning, this));
+        title.Children.Add(UiKit.Text(data.Episode.Title, "TitleTextBlockStyle"));
+        title.Children.Add(UiKit.Pill(isAnomaly ? "Anomalie" : "Ralentissement", isAnomaly ? Status.Info : Status.Warning, this));
         Root.Children.Add(title);
-        var sentence = Ui.Text(data.Episode.Sentence, "BodyLargeTextBlockStyle");
+        var sentence = UiKit.Text(data.Episode.Sentence, "BodyLargeTextBlockStyle");
         sentence.MaxWidth = 820;
         sentence.HorizontalAlignment = HorizontalAlignment.Left;
         Root.Children.Add(sentence);
@@ -73,10 +73,10 @@ public sealed partial class EpisodePage : Page
         var layout = new Grid { ColumnSpacing = 20 };
         layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
         layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
-        var chartCard = Ui.Card(Ui.Stack(8,
-            Ui.Text($"{Ui.When(data.From)} → {data.To.ToLocalTime():HH:mm}", "CaptionTextBlockStyle", secondary: true),
+        var chartCard = UiKit.Card(UiKit.Stack(8,
+            UiKit.Text($"{UiKit.When(data.From)} → {data.To.ToLocalTime():HH:mm}", "CaptionTextBlockStyle", secondary: true),
             chart));
-        var side = Ui.Stack(16, CulpritCard(episode), BeforeCard(data.Events), AdviceCard(data.Episode.Id, episode));
+        var side = UiKit.Stack(16, CulpritCard(episode), BeforeCard(data.Events), AdviceCard(data.Episode.Id, episode));
         Grid.SetColumn(side, 1);
         layout.Children.Add(chartCard);
         layout.Children.Add(side);
@@ -85,35 +85,35 @@ public sealed partial class EpisodePage : Page
 
     private static Border CulpritCard(Episode episode)
     {
-        var panel = Ui.Stack(8, Ui.Text("RESPONSABLE PROBABLE", "CaptionTextBlockStyle", secondary: true));
+        var panel = UiKit.Stack(8, UiKit.Text("RESPONSABLE PROBABLE", "CaptionTextBlockStyle", secondary: true));
         if (episode.Culprit is null)
         {
-            panel.Children.Add(Ui.Text("Aucun programme ne se distingue : la charge venait de Windows ou de plusieurs programmes à la fois.", secondary: true));
+            panel.Children.Add(UiKit.Text("Aucun programme ne se distingue : la charge venait de Windows ou de plusieurs programmes à la fois.", secondary: true));
         }
         else
         {
-            panel.Children.Add(Ui.Text(episode.Culprit, "SubtitleTextBlockStyle"));
-            panel.Children.Add(Ui.Field("Part de l'activité", Ui.Percent(episode.CulpritShare * 100)));
+            panel.Children.Add(UiKit.Text(episode.Culprit, "SubtitleTextBlockStyle"));
+            panel.Children.Add(UiKit.Field("Part de l'activité", UiKit.Percent(episode.CulpritShare * 100)));
         }
 
-        panel.Children.Add(Ui.Field("Durée", Core.Text.Explanations.FormatDuration(episode.Duration)));
-        return Ui.Card(panel);
+        panel.Children.Add(UiKit.Field("Durée", Core.Text.Explanations.FormatDuration(episode.Duration)));
+        return UiKit.Card(panel);
     }
 
     private static Border BeforeCard(IReadOnlyList<(DateTimeOffset At, string Kind, string Label, double? Value)> events)
     {
-        var panel = Ui.Stack(8, Ui.Text("JUSTE AVANT", "CaptionTextBlockStyle", secondary: true));
+        var panel = UiKit.Stack(8, UiKit.Text("JUSTE AVANT", "CaptionTextBlockStyle", secondary: true));
         if (events.Count == 0)
         {
-            panel.Children.Add(Ui.Text("Aucun changement enregistré dans les 30 minutes précédentes.", secondary: true));
+            panel.Children.Add(UiKit.Text("Aucun changement enregistré dans les 30 minutes précédentes.", secondary: true));
         }
 
         foreach (var ev in events)
         {
-            panel.Children.Add(Ui.Text($"{ev.At.ToLocalTime():HH:mm} · {ev.Label}"));
+            panel.Children.Add(UiKit.Text($"{ev.At.ToLocalTime():HH:mm} · {ev.Label}"));
         }
 
-        return Ui.Card(panel);
+        return UiKit.Card(panel);
     }
 
     private Border AdviceCard(long id, Episode episode)
@@ -146,7 +146,7 @@ public sealed partial class EpisodePage : Page
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         buttons.Children.Add(timeline);
         buttons.Children.Add(ignore);
-        return Ui.Card(Ui.Stack(10, Ui.Text("À RETENIR", "CaptionTextBlockStyle", secondary: true), Ui.Text(advice), buttons));
+        return UiKit.Card(UiKit.Stack(10, UiKit.Text("À RETENIR", "CaptionTextBlockStyle", secondary: true), UiKit.Text(advice), buttons));
     }
 
     private static (double Min, double Max) Range(MetricKind metric, IReadOnlyList<ChartPoint> points) => metric switch

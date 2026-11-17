@@ -27,7 +27,7 @@ public sealed partial class HomePage : Page
     {
         base.OnNavigatedTo(e);
         Root.Children.Clear();
-        Root.Children.Add(Ui.Header("Accueil", "Chargement…"));
+        Root.Children.Add(UiKit.Header("Accueil", "Chargement…"));
         Root.Children.Add(new ProgressRing { IsActive = true, HorizontalAlignment = HorizontalAlignment.Left });
 
         var statusTask = ServiceClient.GetStatusAsync();
@@ -50,11 +50,11 @@ public sealed partial class HomePage : Page
     private void Render(LiveStatus? status, HomeData? data)
     {
         Root.Children.Clear();
-        Root.Children.Add(Ui.Header("Accueil", data?.System ?? "SismoPC"));
+        Root.Children.Add(UiKit.Header("Accueil", data?.System ?? "SismoPC"));
 
         if (status is null && data is null)
         {
-            Root.Children.Add(Ui.Banner(
+            Root.Children.Add(UiKit.Banner(
                 "Le service SismoPC ne répond pas",
                 "La collecte ne tourne pas : réinstalle SismoPC ou démarre le service « SismoPC » dans les services Windows.",
                 InfoBarSeverity.Error));
@@ -64,7 +64,7 @@ public sealed partial class HomePage : Page
         if (status is { Learning: true })
         {
             var days = Math.Max(1, (int)Math.Ceiling((status.LearningEndsAt - DateTimeOffset.UtcNow).TotalDays));
-            Root.Children.Add(Ui.Banner(
+            Root.Children.Add(UiKit.Banner(
                 "Apprentissage de la normale",
                 $"SismoPC apprend le comportement habituel de ce PC : encore {days} jour{(days > 1 ? "s" : "")} avant les premières alertes d'anomalie.",
                 InfoBarSeverity.Informational));
@@ -82,7 +82,7 @@ public sealed partial class HomePage : Page
 
         foreach (var alert in data?.Alerts ?? [])
         {
-            Root.Children.Add(Ui.Banner(
+            Root.Children.Add(UiKit.Banner(
                 alert.Subject,
                 alert.Message,
                 alert.Severity == AlertSeverity.Critical ? InfoBarSeverity.Error : InfoBarSeverity.Warning));
@@ -103,9 +103,9 @@ public sealed partial class HomePage : Page
             Height = 140,
             Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Palette.Accent(this)),
         });
-        var number = Ui.Stack(0,
-            Ui.Text(status is null ? "—" : status.Score.ToString(Ui.Fr), "TitleLargeTextBlockStyle"),
-            Ui.Text("sur 100", "CaptionTextBlockStyle", secondary: true));
+        var number = UiKit.Stack(0,
+            UiKit.Text(status is null ? "—" : status.Score.ToString(UiKit.Fr), "TitleLargeTextBlockStyle"),
+            UiKit.Text("sur 100", "CaptionTextBlockStyle", secondary: true));
         number.HorizontalAlignment = HorizontalAlignment.Center;
         number.VerticalAlignment = VerticalAlignment.Center;
         foreach (var child in number.Children.OfType<TextBlock>())
@@ -115,11 +115,11 @@ public sealed partial class HomePage : Page
 
         ring.Children.Add(number);
 
-        var details = Ui.Stack(6, Ui.Text("SCORE DE SANTÉ", "CaptionTextBlockStyle", secondary: true));
-        details.Children.Add(Ui.Text(status?.ScoreLabel ?? "Service indisponible", "SubtitleTextBlockStyle"));
+        var details = UiKit.Stack(6, UiKit.Text("SCORE DE SANTÉ", "CaptionTextBlockStyle", secondary: true));
+        details.Children.Add(UiKit.Text(status?.ScoreLabel ?? "Service indisponible", "SubtitleTextBlockStyle"));
         foreach (var penalty in status?.Penalties ?? [])
         {
-            details.Children.Add(Ui.Text($"−{penalty.Points} : {penalty.Reason}", "CaptionTextBlockStyle", secondary: true));
+            details.Children.Add(UiKit.Text($"−{penalty.Points} : {penalty.Reason}", "CaptionTextBlockStyle", secondary: true));
         }
 
         var link = new HyperlinkButton { Content = "Comprendre le calcul", Padding = new Thickness(0) };
@@ -129,7 +129,7 @@ public sealed partial class HomePage : Page
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 20 };
         panel.Children.Add(ring);
         panel.Children.Add(details);
-        return Ui.Card(panel);
+        return UiKit.Card(panel);
     }
 
     private Border ComponentsCard(LiveStatus? status, HomeData? data)
@@ -146,7 +146,7 @@ public sealed partial class HomePage : Page
                 Describe(Metric(MetricKind.GpuTemperatureC), Metric(MetricKind.GpuPercent), "d'utilisation"),
                 Metric(MetricKind.GpuTemperatureC) >= 90 ? Status.Critical : Status.Good),
             Tile("Mémoire",
-                Metric(MetricKind.MemoryUsedPercent) is { } mem ? $"{Ui.Percent(mem)} utilisée" : "—",
+                Metric(MetricKind.MemoryUsedPercent) is { } mem ? $"{UiKit.Percent(mem)} utilisée" : "—",
                 Status.Good),
         };
 
@@ -155,12 +155,12 @@ public sealed partial class HomePage : Page
             var parts = new List<string>();
             if (disk.WearPercent is { } wear)
             {
-                parts.Add($"Usure {Ui.Percent(wear)}");
+                parts.Add($"Usure {UiKit.Percent(wear)}");
             }
 
             if (disk.TemperatureC is { } t)
             {
-                parts.Add(Ui.Celsius(t));
+                parts.Add(UiKit.Celsius(t));
             }
 
             var state = disk.PredictsFailure ? Status.Critical : disk.WearPercent >= 80 ? Status.Warning : Status.Good;
@@ -170,7 +170,7 @@ public sealed partial class HomePage : Page
         foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
         {
             var free = 100.0 * drive.AvailableFreeSpace / drive.TotalSize;
-            tiles.Add(Tile($"Lecteur {drive.Name.TrimEnd('\\')}", $"{Ui.Percent(free)} d'espace libre", free < 10 ? Status.Warning : Status.Good));
+            tiles.Add(Tile($"Lecteur {drive.Name.TrimEnd('\\')}", $"{UiKit.Percent(free)} d'espace libre", free < 10 ? Status.Warning : Status.Good));
         }
 
         if (data?.LastBootSeconds is { } boot)
@@ -178,8 +178,8 @@ public sealed partial class HomePage : Page
             tiles.Add(Tile("Démarrage", $"{boot:0} s au dernier démarrage", Status.Good));
         }
 
-        var panel = Ui.Stack(14, Ui.SectionTitle("Composants"), Ui.Columns(3, tiles, 10));
-        return Ui.Card(panel);
+        var panel = UiKit.Stack(14, UiKit.SectionTitle("Composants"), UiKit.Columns(3, tiles, 10));
+        return UiKit.Card(panel);
     }
 
     private static string Describe(double? temperature, double? usage, string usageLabel)
@@ -187,12 +187,12 @@ public sealed partial class HomePage : Page
         var parts = new List<string>();
         if (temperature is { } t)
         {
-            parts.Add(Ui.Celsius(t));
+            parts.Add(UiKit.Celsius(t));
         }
 
         if (usage is { } u)
         {
-            parts.Add($"{Ui.Percent(u)} {usageLabel}");
+            parts.Add($"{UiKit.Percent(u)} {usageLabel}");
         }
 
         return parts.Count > 0 ? string.Join(" · ", parts) : "—";
@@ -209,10 +209,10 @@ public sealed partial class HomePage : Page
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = Ui.Text(name, "BodyStrongTextBlockStyle");
+        var title = UiKit.Text(name, "BodyStrongTextBlockStyle");
         title.TextTrimming = TextTrimming.CharacterEllipsis;
         title.TextWrapping = TextWrapping.NoWrap;
-        var pill = Ui.Pill(label, status, this);
+        var pill = UiKit.Pill(label, status, this);
         Grid.SetColumn(pill, 1);
         head.Children.Add(title);
         head.Children.Add(pill);
@@ -223,7 +223,7 @@ public sealed partial class HomePage : Page
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(14),
-            Child = Ui.Stack(6, head, Ui.Text(detail, "CaptionTextBlockStyle", secondary: true)),
+            Child = UiKit.Stack(6, head, UiKit.Text(detail, "CaptionTextBlockStyle", secondary: true)),
         };
     }
 
@@ -235,13 +235,13 @@ public sealed partial class HomePage : Page
         var all = new HyperlinkButton { Content = "Tout voir sur la chronologie" };
         all.Click += (_, _) => App.Window?.Navigate("timeline");
         Grid.SetColumn(all, 1);
-        header.Children.Add(Ui.SectionTitle("Derniers épisodes"));
+        header.Children.Add(UiKit.SectionTitle("Derniers épisodes"));
         header.Children.Add(all);
 
-        var panel = Ui.Stack(4, header);
+        var panel = UiKit.Stack(4, header);
         if (episodes.Count == 0)
         {
-            panel.Children.Add(Ui.Text("Aucun ralentissement ni anomalie ces 7 derniers jours.", secondary: true));
+            panel.Children.Add(UiKit.Text("Aucun ralentissement ni anomalie ces 7 derniers jours.", secondary: true));
         }
 
         foreach (var ep in episodes)
@@ -249,7 +249,7 @@ public sealed partial class HomePage : Page
             panel.Children.Add(EpisodeRow(ep, this));
         }
 
-        return Ui.Card(panel);
+        return UiKit.Card(panel);
     }
 
     /// <summary>Ligne cliquable d'un épisode, partagée avec la chronologie.</summary>
@@ -260,14 +260,14 @@ public sealed partial class HomePage : Page
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var when = Ui.Text(Ui.When(ep.Episode.Start), "CaptionTextBlockStyle", secondary: true);
-        var what = Ui.Stack(0, Ui.Text(ep.Title, "BodyStrongTextBlockStyle"));
+        var when = UiKit.Text(UiKit.When(ep.Episode.Start), "CaptionTextBlockStyle", secondary: true);
+        var what = UiKit.Stack(0, UiKit.Text(ep.Title, "BodyStrongTextBlockStyle"));
         if (ep.Episode.Culprit is { } culprit)
         {
-            what.Children.Add(Ui.Text($"Responsable probable : {culprit}", "CaptionTextBlockStyle", secondary: true));
+            what.Children.Add(UiKit.Text($"Responsable probable : {culprit}", "CaptionTextBlockStyle", secondary: true));
         }
 
-        var pill = Ui.Pill(ep.Episode.Kind == EpisodeKind.Anomaly ? "Anomalie" : "Ralentissement",
+        var pill = UiKit.Pill(ep.Episode.Kind == EpisodeKind.Anomaly ? "Anomalie" : "Ralentissement",
             ep.Episode.Kind == EpisodeKind.Anomaly ? Status.Info : Status.Warning, themeSource);
         Grid.SetColumn(what, 1);
         Grid.SetColumn(pill, 2);
@@ -284,7 +284,7 @@ public sealed partial class HomePage : Page
             BorderThickness = new Thickness(0),
             Padding = new Thickness(4, 10, 4, 10),
         };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"{ep.Title}, {Ui.When(ep.Episode.Start)}");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"{ep.Title}, {UiKit.When(ep.Episode.Start)}");
         button.Click += (_, _) => App.Window?.Navigate("episode", ep.Id);
         return button;
     }

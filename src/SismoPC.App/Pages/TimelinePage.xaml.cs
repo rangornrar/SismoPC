@@ -29,7 +29,7 @@ public sealed partial class TimelinePage : Page
     ];
 
     private readonly List<LineChart> _charts = [];
-    private readonly TextBlock _periodLabel = Ui.Text(string.Empty, "BodyStrongTextBlockStyle");
+    private readonly TextBlock _periodLabel = UiKit.Text(string.Empty, "BodyStrongTextBlockStyle");
     private readonly StackPanel _chartsPanel = new() { Spacing = 18 };
     private readonly StackPanel _episodesPanel = new() { Spacing = 4 };
     private readonly StackPanel _instantPanel = new() { Spacing = 6 };
@@ -58,7 +58,7 @@ public sealed partial class TimelinePage : Page
 
     private void BuildLayout()
     {
-        Root.Children.Add(Ui.Header("Chronologie", "Remonte le temps : chaque courbe, chaque épisode, chaque changement sur le PC"));
+        Root.Children.Add(UiKit.Header("Chronologie", "Remonte le temps : chaque courbe, chaque épisode, chaque changement sur le PC"));
 
         var bar = new SelectorBar();
         foreach (var (label, span) in Ranges)
@@ -111,27 +111,27 @@ public sealed partial class TimelinePage : Page
             var grid = new Grid { ColumnSpacing = 16 };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var label = Ui.Stack(0, Ui.Text(row.Name, "BodyStrongTextBlockStyle"), Ui.Text(row.Unit, "CaptionTextBlockStyle", secondary: true));
+            var label = UiKit.Stack(0, UiKit.Text(row.Name, "BodyStrongTextBlockStyle"), UiKit.Text(row.Unit, "CaptionTextBlockStyle", secondary: true));
             Grid.SetColumn(chart, 1);
             grid.Children.Add(label);
             grid.Children.Add(chart);
             _chartsPanel.Children.Add(grid);
         }
 
-        _chartsPanel.Children.Add(Ui.Text("Clique sur une courbe pour voir les programmes actifs à cet instant.", "CaptionTextBlockStyle", secondary: true));
-        Root.Children.Add(Ui.Card(_chartsPanel));
-        Root.Children.Add(Ui.Card(_instantPanel));
-        Root.Children.Add(Ui.Card(Ui.Stack(8, Ui.SectionTitle("Épisodes et événements de la période"), _episodesPanel)));
-        _instantPanel.Children.Add(Ui.SectionTitle("Programmes à un instant"));
-        _instantPanel.Children.Add(Ui.Text("Aucun instant choisi.", secondary: true));
+        _chartsPanel.Children.Add(UiKit.Text("Clique sur une courbe pour voir les programmes actifs à cet instant.", "CaptionTextBlockStyle", secondary: true));
+        Root.Children.Add(UiKit.Card(_chartsPanel));
+        Root.Children.Add(UiKit.Card(_instantPanel));
+        Root.Children.Add(UiKit.Card(UiKit.Stack(8, UiKit.SectionTitle("Épisodes et événements de la période"), _episodesPanel)));
+        _instantPanel.Children.Add(UiKit.SectionTitle("Programmes à un instant"));
+        _instantPanel.Children.Add(UiKit.Text("Aucun instant choisi.", secondary: true));
     }
 
     private async Task LoadAsync()
     {
         var from = _to - _span;
         _periodLabel.Text = _span <= TimeSpan.FromHours(24)
-            ? $"{from.ToLocalTime().ToString("ddd d MMM HH:mm", Ui.Fr)} → {_to.ToLocalTime():HH:mm}"
-            : $"{from.ToLocalTime().ToString("d MMM", Ui.Fr)} → {_to.ToLocalTime().ToString("d MMM", Ui.Fr)}";
+            ? $"{from.ToLocalTime().ToString("ddd d MMM HH:mm", UiKit.Fr)} → {_to.ToLocalTime():HH:mm}"
+            : $"{from.ToLocalTime().ToString("d MMM", UiKit.Fr)} → {_to.ToLocalTime().ToString("d MMM", UiKit.Fr)}";
 
         var data = await DataAccess.ReadAsync(store => (
             Series: Rows.Select(r => store.ReadSeries(r.Metric, from, _to)).ToList(),
@@ -141,7 +141,7 @@ public sealed partial class TimelinePage : Page
         if (data.Series is null)
         {
             _episodesPanel.Children.Clear();
-            _episodesPanel.Children.Add(Ui.Text("Pas encore de données : le service SismoPC n'a rien enregistré sur cette période.", secondary: true));
+            _episodesPanel.Children.Add(UiKit.Text("Pas encore de données : le service SismoPC n'a rien enregistré sur cette période.", secondary: true));
             return;
         }
 
@@ -164,12 +164,12 @@ public sealed partial class TimelinePage : Page
         foreach (var ev in data.Events)
         {
             var label = ev.Kind == "boot" && ev.Value is { } s ? $"{ev.Label} ({s:0} s)" : ev.Label;
-            _episodesPanel.Children.Add(Ui.Text($"{Ui.When(ev.At)} · {label}", "CaptionTextBlockStyle", secondary: true));
+            _episodesPanel.Children.Add(UiKit.Text($"{UiKit.When(ev.At)} · {label}", "CaptionTextBlockStyle", secondary: true));
         }
 
         if (_episodesPanel.Children.Count == 0)
         {
-            _episodesPanel.Children.Add(Ui.Text("Aucun épisode sur cette période.", secondary: true));
+            _episodesPanel.Children.Add(UiKit.Text("Aucun épisode sur cette période.", secondary: true));
         }
     }
 
@@ -182,18 +182,18 @@ public sealed partial class TimelinePage : Page
 
         var processes = await DataAccess.ReadAsync(store => store.ReadProcessesAt(at)) ?? [];
         _instantPanel.Children.Clear();
-        _instantPanel.Children.Add(Ui.SectionTitle($"À {at.ToLocalTime():HH:mm}"));
+        _instantPanel.Children.Add(UiKit.SectionTitle($"À {at.ToLocalTime():HH:mm}"));
         if (processes.Count == 0)
         {
-            _instantPanel.Children.Add(Ui.Text("Le détail par programme n'est conservé que 7 jours.", secondary: true));
+            _instantPanel.Children.Add(UiKit.Text("Le détail par programme n'est conservé que 7 jours.", secondary: true));
             return;
         }
 
-        _instantPanel.Children.Add(Ui.Text("Programmes les plus gourmands à cet instant", "CaptionTextBlockStyle", secondary: true));
+        _instantPanel.Children.Add(UiKit.Text("Programmes les plus gourmands à cet instant", "CaptionTextBlockStyle", secondary: true));
         foreach (var p in processes.Take(8))
         {
-            _instantPanel.Children.Add(Ui.Field(p.Name,
-                $"Processeur {Ui.Percent(p.CpuPercent)} · Mémoire {p.WorkingSetBytes / 1e9:0.0} Go · Disque {p.DiskBytesPerSecond / 1e6:0.0} Mo/s"));
+            _instantPanel.Children.Add(UiKit.Field(p.Name,
+                $"Processeur {UiKit.Percent(p.CpuPercent)} · Mémoire {p.WorkingSetBytes / 1e9:0.0} Go · Disque {p.DiskBytesPerSecond / 1e6:0.0} Mo/s"));
         }
     }
 
