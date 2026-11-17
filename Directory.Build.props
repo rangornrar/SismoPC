@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Company>rangornrar</Company>
+    <Product>SismoPC</Product>
+    <Authors>Patrick (rangornrar)</Authors>
+    <Copyright>Copyright (c) 2026 Patrick (rangornrar)</Copyright>
+    <Version>0.1.0</Version>
+    <NeutralLanguage>fr-FR</NeutralLanguage>
+  </PropertyGroup>
+</Project>

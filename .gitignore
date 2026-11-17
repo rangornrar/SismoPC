@@ -1,0 +1,24 @@
+# Build
+bin/
+obj/
+publish/
+artifacts/
+TestResults/
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+
+# Signature et secrets : jamais dans le dépôt
+*.pfx
+*.p12
+*.snk
+*.key
+secrets.json
+appsettings.*.local.json
+
+# Données locales de test
+*.db
+*.db-wal
+*.db-shm

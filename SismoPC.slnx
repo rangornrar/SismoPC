@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SismoPC.Core/SismoPC.Core.csproj" />
+    <Project Path="src/SismoPC.Data/SismoPC.Data.csproj" />
+    <Project Path="src/SismoPC.Collectors/SismoPC.Collectors.csproj" />
+    <Project Path="src/SismoPC.Service/SismoPC.Service.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SismoPC.Core.Tests/SismoPC.Core.Tests.csproj" />
+    <Project Path="tests/SismoPC.Data.Tests/SismoPC.Data.Tests.csproj" />
+  </Folder>
+</Solution>
