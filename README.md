@@ -26,6 +26,12 @@
 | `src/SismoPC.Notifier` | Notifications Windows dans la session de l'utilisateur |
 | `tests/` | Tests automatisés |
 
+## Installer
+
+Télécharge l'installeur de la dernière version dans les [Releases](https://github.com/rangornrar/SismoPC/releases) et lance-le.
+L'installeur n'est pas encore signé : Windows SmartScreen peut demander une confirmation (« Informations complémentaires », puis « Exécuter quand même »).
+Pour les températures, installe aussi le pilote [PawnIO](https://github.com/namazso/PawnIO.Setup/releases).
+
 ## Compiler
 
 Prérequis : SDK .NET 10.
@@ -35,7 +41,8 @@ dotnet build SismoPC.slnx
 dotnet test SismoPC.slnx
 ```
 
-Chaque envoi sur `main` est compilé et testé par GitHub Actions.
+Chaque envoi sur `main` est compilé et testé par GitHub Actions, qui produit aussi un installeur de développement.
+Une version publiée se fait en poussant un tag `vX.Y.Z` : `build/package.ps1` construit l'installeur (Inno Setup) et la release GitHub est créée.
 
 ## Licences tierces
 

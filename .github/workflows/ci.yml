@@ -28,14 +28,10 @@ jobs:
       - name: Tests
         run: dotnet test SismoPC.slnx --configuration Release --no-build --logger "trx;LogFileName=results.trx" --results-directory TestResults
 
-      - name: Publication du service (x64, autonome)
-        run: dotnet publish src/SismoPC.Service/SismoPC.Service.csproj --configuration Release --runtime win-x64 --self-contained true --output publish/service
-
-      - name: Publication du Notifier (x64, autonome)
-        run: dotnet publish src/SismoPC.Notifier/SismoPC.Notifier.csproj --configuration Release --runtime win-x64 --self-contained true --output publish/notifier
-
-      - name: Publication de l'interface (x64, autonome)
-        run: dotnet publish src/SismoPC.App/SismoPC.App.csproj --configuration Release --runtime win-x64 --self-contained true --output publish/app
+      # Installeur de développement (version 0.0.0) : téléchargeable dans les artefacts de chaque exécution.
+      - name: Installeur
+        shell: pwsh
+        run: ./build/package.ps1 -Version 0.0.${{ github.run_number }}
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -45,5 +41,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sismopc-win-x64
-          path: publish
+          name: installeur-dev
+          path: artifacts

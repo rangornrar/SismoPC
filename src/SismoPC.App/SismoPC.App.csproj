@@ -6,6 +6,7 @@
     <RootNamespace>SismoPC.Ui</RootNamespace>
     <AssemblyName>SismoPC</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\SismoPC.ico</ApplicationIcon>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
     <!-- Application non packagée et autonome (ADR-2, ADR-8) : pas de MSIX, runtime Windows App SDK embarqué -->
@@ -16,6 +17,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\assets\SismoPC.ico" Link="SismoPC.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SismoPC.Core\SismoPC.Core.csproj" />

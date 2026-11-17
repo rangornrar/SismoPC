@@ -11,6 +11,12 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 860));
+        var icon = Path.Combine(AppContext.BaseDirectory, "SismoPC.ico");
+        if (File.Exists(icon))
+        {
+            AppWindow.SetIcon(icon);
+        }
+
         ContentFrame.Navigated += (_, _) => Nav.IsBackEnabled = ContentFrame.CanGoBack;
         Nav.SelectedItem = Nav.MenuItems[0];
     }
