@@ -11,7 +11,7 @@ namespace SismoPC.Ui.Pages;
 /// <summary>Matériel : inventaire complet et santé par composant, copie de l'inventaire (US1, US6).</summary>
 public sealed partial class HardwarePage : Page
 {
-    private static readonly string[] TypeOrder = ["Processeur", "Carte graphique", "Mémoire", "Disque", "Carte mère", "BIOS", "Système"];
+    private static readonly string[] TypeOrder = ["Processeur", "Carte graphique", "Mémoire", "Carte mère", "BIOS", "Écran", "Réseau", "Système", "Disque"];
 
     public HardwarePage()
     {
@@ -43,7 +43,7 @@ public sealed partial class HardwarePage : Page
         copy.VerticalAlignment = VerticalAlignment.Bottom;
         header.Children.Add(UiKit.Header("Matériel", components.Count == 0
             ? "Inventaire pas encore disponible : le service ne l'a pas encore réalisé."
-            : "Inventaire réalisé au démarrage du service SismoPC"));
+            : "Inventaire mis à jour au démarrage du service, puis chaque jour"));
         header.Children.Add(copy);
         Root.Children.Add(header);
 

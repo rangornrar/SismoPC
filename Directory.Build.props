@@ -9,7 +9,7 @@
     <Product>SismoPC</Product>
     <Authors>Patrick (rangornrar)</Authors>
     <Copyright>Copyright (c) 2026 Patrick (rangornrar)</Copyright>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <NeutralLanguage>fr-FR</NeutralLanguage>
   </PropertyGroup>
 </Project>

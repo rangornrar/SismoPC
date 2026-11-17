@@ -156,4 +156,15 @@ public sealed class SismoStoreTests : IDisposable
         var read = _store.ReadComponents().ShouldHaveSingleItem();
         read.Details["Threads"].ShouldBe("16");
     }
+
+    [Fact]
+    public void Composant_retire_n_est_plus_affiche()
+    {
+        var oldGpu = new HardwareComponent("Carte graphique", "GeForce GTX 1060", new Dictionary<string, string>());
+        var newGpu = new HardwareComponent("Carte graphique", "GeForce RTX 3070", new Dictionary<string, string>());
+        _store.UpsertComponents([oldGpu], T0);
+        _store.UpsertComponents([newGpu], T0.AddDays(30));
+
+        _store.ReadComponents().ShouldHaveSingleItem().Name.ShouldBe("GeForce RTX 3070");
+    }
 }

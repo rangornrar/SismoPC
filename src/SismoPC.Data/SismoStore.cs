@@ -306,7 +306,12 @@ public sealed class SismoStore : IDisposable
 
     public IReadOnlyList<HardwareComponent> ReadComponents()
     {
-        using var cmd = Command("SELECT type, name, details FROM component ORDER BY type, name");
+        // Inventaire courant uniquement : un composant retiré reste en base (historique) mais n'est plus affiché.
+        using var cmd = Command("""
+            SELECT type, name, details FROM component
+            WHERE last_seen = (SELECT MAX(last_seen) FROM component)
+            ORDER BY type, name
+            """);
         using var r = cmd.ExecuteReader();
         var list = new List<HardwareComponent>();
         while (r.Read())

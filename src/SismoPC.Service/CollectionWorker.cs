@@ -40,6 +40,7 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
     private DateTimeOffset _lastPurge;
     private DateTimeOffset _lastSlowdownNotification;
     private DateTimeOffset _lastTrends;
+    private DateTimeOffset _lastInventory;
     private IReadOnlyList<string> _degradedTrends = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -93,7 +94,7 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
         _temperatures = new TemperatureCollector();
 
         var now = DateTimeOffset.UtcNow;
-        _store.UpsertComponents(InventoryCollector.Read(), now);
+        RefreshInventory(now);
         RecordBoots(now);
         RefreshDisks(now);
         RefreshVolumes(now);
@@ -127,6 +128,11 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
         foreach (var episode in _saturation!.Process(snapshot).Concat(_anomalies!.Process(snapshot)))
         {
             Save(episode, now);
+        }
+
+        if (now - _lastInventory >= TimeSpan.FromDays(1))
+        {
+            RefreshInventory(now);
         }
 
         if (now - _lastDiskCheck >= TimeSpan.FromHours(1))
@@ -250,6 +256,13 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
 
     private bool Setting(string key, bool defaultValue) =>
         _store!.GetSetting(key) is { } v ? string.Equals(v, "true", StringComparison.OrdinalIgnoreCase) : defaultValue;
+
+    /// <summary>Inventaire au démarrage puis une fois par jour (changement de matériel, de pilote, de version de Windows).</summary>
+    private void RefreshInventory(DateTimeOffset now)
+    {
+        _lastInventory = now;
+        _store!.UpsertComponents(InventoryCollector.Read(), now);
+    }
 
     private void RefreshDisks(DateTimeOffset now)
     {

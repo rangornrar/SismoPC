@@ -37,6 +37,13 @@ internal static partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool GetProcessIoCounters(IntPtr process, out IoCounters counters);
 
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GetFirmwareType(out uint firmwareType);
+
+    /// <summary>1 = BIOS ancien, 2 = UEFI, 0 = inconnu.</summary>
+    internal static int FirmwareType() => GetFirmwareType(out var type) ? (int)type : 0;
+
     internal static MemoryStatusEx? MemoryStatus()
     {
         var status = new MemoryStatusEx { Length = (uint)Marshal.SizeOf<MemoryStatusEx>() };
