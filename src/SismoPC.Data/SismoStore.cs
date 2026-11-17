@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using SismoPC.Core.Detection;
+using SismoPC.Core.Health;
 using SismoPC.Core.Model;
 
 namespace SismoPC.Data;
@@ -359,13 +360,14 @@ public sealed class SismoStore : IDisposable
         using var tx = _connection.BeginTransaction();
         foreach (var d in disks)
         {
-            using var cmd = Command("INSERT INTO disk_health(ts, name, wear, temp, hours, failing) VALUES ($ts, $n, $w, $t, $h, $f)", tx);
+            using var cmd = Command("INSERT INTO disk_health(ts, name, wear, temp, hours, failing, ssd) VALUES ($ts, $n, $w, $t, $h, $f, $s)", tx);
             cmd.Parameters.AddWithValue("$ts", now.ToUnixTimeMilliseconds());
             cmd.Parameters.AddWithValue("$n", d.Name);
             cmd.Parameters.AddWithValue("$w", (object?)d.WearPercent ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$t", (object?)d.TemperatureC ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$h", (object?)d.PowerOnHours ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$f", d.PredictsFailure ? 1 : 0);
+            cmd.Parameters.AddWithValue("$s", d.IsSsd ? 1 : 0);
             cmd.ExecuteNonQuery();
         }
 
@@ -376,6 +378,119 @@ public sealed class SismoStore : IDisposable
     {
         Execute("INSERT INTO system_event(ts, kind, label, value) VALUES ($ts, $k, $l, $v)",
             ("$ts", at.ToUnixTimeMilliseconds()), ("$k", kind), ("$l", label), ("$v", (object?)value ?? DBNull.Value));
+    }
+
+    public IReadOnlyList<(DateTimeOffset At, string Kind, string Label, double? Value)> ReadSystemEvents(DateTimeOffset from, DateTimeOffset to)
+    {
+        using var cmd = Command("SELECT ts, kind, label, value FROM system_event WHERE ts BETWEEN $f AND $t ORDER BY ts");
+        cmd.Parameters.AddWithValue("$f", from.ToUnixTimeMilliseconds());
+        cmd.Parameters.AddWithValue("$t", to.ToUnixTimeMilliseconds());
+        using var r = cmd.ExecuteReader();
+        var list = new List<(DateTimeOffset, string, string, double?)>();
+        while (r.Read())
+        {
+            list.Add((DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(0)), r.GetString(1), r.GetString(2), r.IsDBNull(3) ? null : r.GetDouble(3)));
+        }
+
+        return list;
+    }
+
+    /// <summary>Dernier relevé de santé de chaque disque.</summary>
+    public IReadOnlyList<DiskHealth> ReadLatestDiskHealth()
+    {
+        using var cmd = Command("""
+            SELECT d.name, d.wear, d.temp, d.hours, d.failing, d.ssd FROM disk_health d
+            JOIN (SELECT name, MAX(ts) AS ts FROM disk_health GROUP BY name) last ON last.name = d.name AND last.ts = d.ts
+            ORDER BY d.name
+            """);
+        using var r = cmd.ExecuteReader();
+        var list = new List<DiskHealth>();
+        while (r.Read())
+        {
+            list.Add(new DiskHealth(
+                r.GetString(0),
+                IsSsd: r.GetInt32(5) == 1,
+                PredictsFailure: r.GetInt32(4) == 1,
+                WearPercent: r.IsDBNull(1) ? null : r.GetDouble(1),
+                TemperatureC: r.IsDBNull(2) ? null : r.GetDouble(2),
+                PowerOnHours: r.IsDBNull(3) ? null : r.GetInt64(3)));
+        }
+
+        return list;
+    }
+
+    public StoredEpisode? ReadEpisode(long id)
+    {
+        using var cmd = Command("SELECT start_ts FROM episode WHERE id = $id");
+        cmd.Parameters.AddWithValue("$id", id);
+        if (cmd.ExecuteScalar() is not long start)
+        {
+            return null;
+        }
+
+        var at = DateTimeOffset.FromUnixTimeMilliseconds(start);
+        return ReadEpisodes(at, at).FirstOrDefault(e => e.Id == id);
+    }
+
+    public void IgnoreEpisode(long id) => Execute("UPDATE episode SET ignored = 1 WHERE id = $id", ("$id", id));
+
+    // ---------- Tendances (US8) ----------
+
+    /// <summary>Durée moyenne de démarrage par mois, en secondes.</summary>
+    public IReadOnlyList<MonthlyValue> ReadMonthlyBootSeconds() => ReadMonthly("""
+        SELECT strftime('%Y-%m', ts / 1000, 'unixepoch') AS month, AVG(value)
+        FROM system_event WHERE kind = 'boot' AND value IS NOT NULL GROUP BY month ORDER BY month
+        """);
+
+    /// <summary>Valeur « au repos » d'une mesure par mois : moyenne des minimums horaires.</summary>
+    public IReadOnlyList<MonthlyValue> ReadMonthlyAtRest(MetricKind metric) => ReadMonthly("""
+        SELECT strftime('%Y-%m', ts / 1000, 'unixepoch') AS month, AVG(min)
+        FROM sample_hour WHERE metric = $m GROUP BY month ORDER BY month
+        """, ("$m", (int)metric));
+
+    /// <summary>Usure maximale des SSD par mois, en pour cent.</summary>
+    public IReadOnlyList<MonthlyValue> ReadMonthlySsdWear() => ReadMonthly("""
+        SELECT strftime('%Y-%m', ts / 1000, 'unixepoch') AS month, MAX(wear)
+        FROM disk_health WHERE wear IS NOT NULL GROUP BY month ORDER BY month
+        """);
+
+    /// <summary>Les quatre indicateurs de dégradation des spécifications.</summary>
+    public IReadOnlyList<Trend> ReadTrends() =>
+    [
+        new Trend("Durée de démarrage", "s", ReadMonthlyBootSeconds()),
+        new Trend("Mémoire au repos", "%", ReadMonthlyAtRest(MetricKind.MemoryUsedPercent)),
+        new Trend("Température du processeur au repos", "°C", ReadMonthlyAtRest(MetricKind.CpuTemperatureC)),
+        new Trend("Usure du SSD", "%", ReadMonthlySsdWear()),
+    ];
+
+    private List<MonthlyValue> ReadMonthly(string sql, params (string Name, object Value)[] parameters)
+    {
+        using var cmd = Command(sql);
+        foreach (var (name, value) in parameters)
+        {
+            cmd.Parameters.AddWithValue(name, value);
+        }
+
+        using var r = cmd.ExecuteReader();
+        var list = new List<MonthlyValue>();
+        while (r.Read())
+        {
+            if (!r.IsDBNull(1))
+            {
+                list.Add(new MonthlyValue(r.GetString(0), r.GetDouble(1)));
+            }
+        }
+
+        return list;
+    }
+
+    /// <summary>Taille de la base sur le disque, fichiers WAL compris.</summary>
+    public long DatabaseSizeBytes()
+    {
+        var path = _connection.DataSource;
+        return new[] { path, path + "-wal", path + "-shm" }
+            .Where(File.Exists)
+            .Sum(p => new FileInfo(p).Length);
     }
 
     // ---------- Réglages ----------

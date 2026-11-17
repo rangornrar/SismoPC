@@ -94,7 +94,8 @@ internal static class Schema
             wear    REAL,
             temp    REAL,
             hours   INTEGER,
-            failing INTEGER NOT NULL
+            failing INTEGER NOT NULL,
+            ssd     INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS system_event (

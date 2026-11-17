@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="SismoPC.Ui.Pages.EpisodePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    NavigationCacheMode="Disabled">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="Root" Spacing="20" Padding="32,28,32,40" MaxWidth="1200" HorizontalAlignment="Stretch" />
+    </ScrollViewer>
+</Page>

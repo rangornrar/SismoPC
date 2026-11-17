@@ -22,6 +22,7 @@
 | `src/SismoPC.Data` | Base SQLite locale (`C:\ProgramData\SismoPC`) |
 | `src/SismoPC.Collectors` | Lecture des compteurs Windows, WMI, températures, santé des disques, journaux |
 | `src/SismoPC.Service` | Service Windows de collecte et canal nommé |
+| `src/SismoPC.App` | Interface WinUI 3 : accueil, chronologie, épisodes, matériel, tendances, paramètres |
 | `src/SismoPC.Notifier` | Notifications Windows dans la session de l'utilisateur |
 | `tests/` | Tests automatisés |
 

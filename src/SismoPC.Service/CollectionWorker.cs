@@ -39,6 +39,8 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
     private DateTimeOffset _lastAlertSync;
     private DateTimeOffset _lastPurge;
     private DateTimeOffset _lastSlowdownNotification;
+    private DateTimeOffset _lastTrends;
+    private IReadOnlyList<string> _degradedTrends = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -172,8 +174,8 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
 
         // Réglages des spécifications : anomalies notifiées, ralentissements non (au plus un par heure si activés).
         var notify = episode.Kind == EpisodeKind.Anomaly
-            ? Setting("notify.anomaly", defaultValue: true)
-            : Setting("notify.slowdown", defaultValue: false) && now - _lastSlowdownNotification >= SlowdownNotificationGap;
+            ? Setting(SettingKeys.NotifyAnomaly, defaultValue: true)
+            : Setting(SettingKeys.NotifySlowdown, defaultValue: false) && now - _lastSlowdownNotification >= SlowdownNotificationGap;
 
         if (notify)
         {
@@ -209,7 +211,7 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
             _store!.ReadOpenAlerts(),
             anomalies.OpenCount(now),
             _store.CountSlowdowns(now.AddDays(-7)),
-            DegradedTrends: [],
+            DegradedTrends(now),
             anomalies.IsLearning(now)));
 
         status.Update(new LiveStatus(
@@ -221,6 +223,18 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
             anomalies.IsLearning(now),
             anomalies.LearningStartedAt + anomalies.LearningPeriod,
             _temperatures!.IsAvailable));
+    }
+
+    /// <summary>Indicateurs dégradés de plus de 20 % (US8), recalculés une fois par heure.</summary>
+    private IReadOnlyList<string> DegradedTrends(DateTimeOffset now)
+    {
+        if (now - _lastTrends >= TimeSpan.FromHours(1))
+        {
+            _lastTrends = now;
+            _degradedTrends = _store!.ReadTrends().Where(t => t.IsDegraded).Select(t => t.Name).ToList();
+        }
+
+        return _degradedTrends;
     }
 
     private static string AlertTitle(HardwareAlert alert) => alert.Kind switch

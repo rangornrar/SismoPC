@@ -31,10 +31,25 @@ public static class RequestTypes
     public const string Ping = "ping";
     public const string Status = "status";
     public const string Subscribe = "subscribe";
+    public const string SetSetting = "setSetting";
+    public const string IgnoreEpisode = "ignoreEpisode";
 }
 
-/// <summary>Requête d'un client.</summary>
-public sealed record PipeRequest(string Type);
+/// <summary>Réglages modifiables depuis l'interface. Toute autre clé est refusée par le service.</summary>
+public static class SettingKeys
+{
+    public const string NotifyAnomaly = "notify.anomaly";
+    public const string NotifySlowdown = "notify.slowdown";
+
+    public static IReadOnlySet<string> Editable { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        NotifyAnomaly,
+        NotifySlowdown,
+    };
+}
+
+/// <summary>Requête d'un client ; <paramref name="Key"/> et <paramref name="Value"/> servent à « setSetting ».</summary>
+public sealed record PipeRequest(string Type, string? Key = null, string? Value = null);
 
 /// <summary>Événement poussé aux abonnés : épisode, anomalie ou alerte matérielle.</summary>
 /// <param name="Kind">« alert », « slowdown » ou « anomaly ».</param>

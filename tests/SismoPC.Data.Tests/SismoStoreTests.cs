@@ -1,4 +1,5 @@
 using SismoPC.Core.Detection;
+using SismoPC.Core.Health;
 using SismoPC.Core.Model;
 
 namespace SismoPC.Data.Tests;
@@ -110,6 +111,39 @@ public sealed class SismoStoreTests : IDisposable
         var stats = reloaded.Slots[BaselineSlot.For(MetricKind.CpuPercent, T0)];
         stats.Count.ShouldBe(2);
         stats.Mean.ShouldBe(4);
+    }
+
+    [Fact]
+    public void Tendances_mensuelles()
+    {
+        _store.AddSystemEvent(new DateTimeOffset(2026, 6, 3, 8, 0, 0, TimeSpan.Zero), "boot", "Démarrage", 38);
+        _store.AddSystemEvent(new DateTimeOffset(2026, 11, 3, 8, 0, 0, TimeSpan.Zero), "boot", "Démarrage", 50);
+        _store.AddSystemEvent(new DateTimeOffset(2026, 11, 10, 8, 0, 0, TimeSpan.Zero), "boot", "Démarrage", 54);
+        _store.AddDiskHealth([new DiskHealth("SSD", true, false, 9, 40, 100)], new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
+        _store.AddDiskHealth([new DiskHealth("SSD", true, false, 12, 46, 200)], T0);
+
+        var trends = _store.ReadTrends();
+
+        var boot = trends.Single(t => t.Name == "Durée de démarrage");
+        boot.Months.Select(m => m.Value).ShouldBe(new[] { 38.0, 52.0 });
+        boot.IsDegraded.ShouldBeTrue();
+        trends.Single(t => t.Name == "Usure du SSD").Last!.Value.Value.ShouldBe(12);
+
+        var disk = _store.ReadLatestDiskHealth().ShouldHaveSingleItem();
+        disk.WearPercent.ShouldBe(12);
+        disk.IsSsd.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Episode_relu_par_identifiant_et_ignore()
+    {
+        var e = new Episode(EpisodeKind.Anomaly, Resource.Cpu, MetricKind.CpuPercent, T0, T0.AddMinutes(20), 40, 3, "ms-teams.exe", 0.8);
+        var id = _store.AddEpisode(e, "titre", "phrase");
+
+        _store.ReadEpisode(id).ShouldNotBeNull().Episode.Culprit.ShouldBe("ms-teams.exe");
+        _store.IgnoreEpisode(id);
+        _store.ReadEpisode(id).ShouldBeNull();
+        _store.ReadEpisode(999).ShouldBeNull();
     }
 
     [Fact]

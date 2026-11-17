@@ -88,6 +88,18 @@ public sealed partial class PipeServer(EventHub hub, StatusProvider status, ILog
                                     : "{\"type\":\"starting\"}").ConfigureAwait(false);
                                 break;
 
+                            case RequestTypes.SetSetting:
+                                await writer.WriteLineAsync(TrySetSetting(request!.Key, request.Value)
+                                    ? "{\"type\":\"ok\"}"
+                                    : "{\"type\":\"refused\"}").ConfigureAwait(false);
+                                break;
+
+                            case RequestTypes.IgnoreEpisode:
+                                await writer.WriteLineAsync(TryIgnoreEpisode(request!.Key)
+                                    ? "{\"type\":\"ok\"}"
+                                    : "{\"type\":\"refused\"}").ConfigureAwait(false);
+                                break;
+
                             case RequestTypes.Subscribe:
                                 await foreach (var e in hub.Subscribe(cancellationToken).ConfigureAwait(false))
                                 {
@@ -112,6 +124,31 @@ public sealed partial class PipeServer(EventHub hub, StatusProvider status, ILog
                 }
             }
         }
+    }
+
+    /// <summary>Seules les clés de <see cref="SettingKeys.Editable"/> avec « true » ou « false » sont acceptées.</summary>
+    private static bool TrySetSetting(string? key, string? value)
+    {
+        if (key is null || !SettingKeys.Editable.Contains(key) || value is not ("true" or "false"))
+        {
+            return false;
+        }
+
+        using var store = new SismoPC.Data.SismoStore(SismoPaths.Database);
+        store.SetSetting(key, value);
+        return true;
+    }
+
+    private static bool TryIgnoreEpisode(string? key)
+    {
+        if (!long.TryParse(key, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id))
+        {
+            return false;
+        }
+
+        using var store = new SismoPC.Data.SismoStore(SismoPaths.Database);
+        store.IgnoreEpisode(id);
+        return true;
     }
 
     private static PipeRequest? Parse(string line)
