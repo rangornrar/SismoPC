@@ -167,4 +167,48 @@ public sealed class SismoStoreTests : IDisposable
 
         _store.ReadComponents().ShouldHaveSingleItem().Name.ShouldBe("GeForce RTX 3070");
     }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(100)]
+    public void Historique_purge_reste_consultable_au_zoom(int days)
+    {
+        var old = DateTimeOffset.UtcNow.AddDays(-days);
+        _store.WriteSnapshot(Snap(old, 70));
+        _store.Aggregate(old.AddMinutes(-1));
+        _store.Purge(DateTimeOffset.UtcNow, new RetentionPolicy());
+        _store.ReadSeries(MetricKind.CpuPercent, old.AddMinutes(-15), old.AddMinutes(15)).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void Aucun_programme_sans_releve_proche()
+    {
+        _store.WriteSnapshot(Snap(T0, 70));
+        _store.ReadProcessesAt(T0.AddDays(-30)).ShouldBeEmpty();
+        _store.ReadProcessesAt(T0.AddSeconds(4)).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void Capteur_inconnu_ne_resout_pas_alerte_et_message_est_actualise()
+    {
+        var hot = new HardwareAlert(AlertKind.CpuTemperature, AlertSeverity.Critical, "CPU", "100 C");
+        _store.SyncAlerts([hot], T0);
+        _store.SyncAlerts([], T0.AddSeconds(30), new HashSet<AlertKind> { AlertKind.CpuTemperature });
+        _store.ReadOpenAlerts().ShouldHaveSingleItem();
+        _store.SyncAlerts([hot with { Message = "110 C" }], T0.AddMinutes(1));
+        _store.ReadOpenAlerts().Single().Message.ShouldBe("110 C");
+        _store.SyncAlerts([], T0.AddMinutes(2));
+        _store.ReadOpenAlerts().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Checkpoint_episode_est_actualise_sans_doublon()
+    {
+        var episode = new Episode(EpisodeKind.Anomaly, Resource.Cpu, MetricKind.CpuPercent, T0, T0.AddMinutes(5), 40, 3, null, 0);
+        var id = _store.AddEpisode(episode, "actif", "actif");
+        _store.AddEpisode(episode with { End = T0.AddMinutes(8) }, "clos", "clos").ShouldBe(id);
+        var stored = _store.ReadEpisodes(T0, T0.AddHours(1)).ShouldHaveSingleItem();
+        stored.Title.ShouldBe("clos");
+        stored.Episode.End.ShouldBe(T0.AddMinutes(8));
+    }
 }

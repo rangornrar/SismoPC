@@ -19,7 +19,7 @@ public static class DiskHealthCollector
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var disks = new List<DiskHealth>();
-        foreach (var d in WmiHelper.Query(Storage, "SELECT DeviceId, FriendlyName, MediaType, HealthStatus FROM MSFT_PhysicalDisk"))
+        foreach (var d in WmiHelper.Query(Storage, "SELECT UniqueId, SerialNumber, DeviceId, FriendlyName, MediaType, HealthStatus FROM MSFT_PhysicalDisk"))
         {
             reliability.TryGetValue(d.Text("DeviceId"), out var r);
 
@@ -29,7 +29,7 @@ public static class DiskHealthCollector
             var temp = r?.Double("Temperature");
 
             disks.Add(new DiskHealth(
-                Name: d.Text("FriendlyName"),
+                Name: DiskIdentity.Label(d.Text("FriendlyName"), d.Text("UniqueId"), d.Text("SerialNumber"), d.Text("DeviceId")),
                 IsSsd: isSsd,
                 PredictsFailure: failing,
                 WearPercent: isSsd ? r?.Double("Wear") : null,

@@ -44,8 +44,11 @@ public sealed class SismoStore : IDisposable
 
         if (!readOnly)
         {
+            var existingVersion = Convert.ToInt32(Command("PRAGMA user_version").ExecuteScalar(), CultureInfo.InvariantCulture);
+            if (existingVersion > Schema.Version) throw new InvalidOperationException("Base créée par une version plus récente de SismoPC.");
             Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
             Execute(Schema.Create);
+            Execute($"PRAGMA user_version={Schema.Version}");
             SetSetting("schema_version", Schema.Version.ToString(CultureInfo.InvariantCulture));
         }
     }
@@ -128,12 +131,29 @@ public sealed class SismoStore : IDisposable
     /// <summary>Courbe d'une mesure : détail, minute ou heure selon la longueur de la période.</summary>
     public IReadOnlyList<SeriesPoint> ReadSeries(MetricKind metric, DateTimeOffset from, DateTimeOffset to)
     {
+        // Les résolutions anciennes restent consultables, même dans une petite fenêtre.
         var span = to - from;
         var sql = span <= TimeSpan.FromHours(6)
-            ? "SELECT ts, value, value, value FROM sample WHERE metric = $m AND ts BETWEEN $f AND $t ORDER BY ts"
+            ? """
+              SELECT ts, value, value, value FROM sample WHERE metric=$m AND ts BETWEEN $f AND $t
+              UNION ALL
+              SELECT ts,min,avg,max FROM sample_minute a WHERE metric=$m AND ts BETWEEN ($f / 60000) * 60000 AND $t
+                AND NOT EXISTS (SELECT 1 FROM sample d WHERE d.metric=$m AND d.ts >= a.ts AND d.ts < a.ts+60000)
+              UNION ALL
+              SELECT ts,min,avg,max FROM sample_hour a WHERE metric=$m AND ts BETWEEN ($f / 3600000) * 3600000 AND $t
+                AND NOT EXISTS (SELECT 1 FROM sample_minute d WHERE d.metric=$m AND d.ts >= a.ts AND d.ts < a.ts+3600000)
+                AND NOT EXISTS (SELECT 1 FROM sample d WHERE d.metric=$m AND d.ts >= a.ts AND d.ts < a.ts+3600000)
+              ORDER BY ts
+              """
             : span <= TimeSpan.FromDays(30)
-                ? "SELECT ts, min, avg, max FROM sample_minute WHERE metric = $m AND ts BETWEEN $f AND $t ORDER BY ts"
-                : "SELECT ts, min, avg, max FROM sample_hour WHERE metric = $m AND ts BETWEEN $f AND $t ORDER BY ts";
+                ? """
+                  SELECT ts,min,avg,max FROM sample_minute WHERE metric=$m AND ts BETWEEN ($f / 60000) * 60000 AND $t
+                  UNION ALL
+                  SELECT ts,min,avg,max FROM sample_hour a WHERE metric=$m AND ts BETWEEN ($f / 3600000) * 3600000 AND $t
+                    AND NOT EXISTS (SELECT 1 FROM sample_minute d WHERE d.metric=$m AND d.ts >= a.ts AND d.ts < a.ts+3600000)
+                  ORDER BY ts
+                  """
+                : "SELECT ts,min,avg,max FROM sample_hour WHERE metric=$m AND ts BETWEEN ($f / 3600000) * 3600000 AND $t ORDER BY ts";
 
         using var cmd = Command(sql);
         cmd.Parameters.AddWithValue("$m", (int)metric);
@@ -156,7 +176,7 @@ public sealed class SismoStore : IDisposable
     {
         using var cmd = Command("""
             SELECT name, cpu, ws, disk FROM process_sample
-            WHERE ts = (SELECT ts FROM process_sample ORDER BY ABS(ts - $at) LIMIT 1)
+            WHERE ts = (SELECT ts FROM process_sample WHERE ts BETWEEN $at - 10000 AND $at + 10000 ORDER BY ABS(ts - $at) LIMIT 1)
             ORDER BY cpu DESC
             """);
         cmd.Parameters.AddWithValue("$at", at.ToUnixTimeMilliseconds());
@@ -175,6 +195,19 @@ public sealed class SismoStore : IDisposable
     public long AddEpisode(Episode e, string title, string sentence)
     {
         ArgumentNullException.ThrowIfNull(e);
+        using (var existing = Command("SELECT id FROM episode WHERE kind=$k AND metric=$m AND start_ts=$s LIMIT 1"))
+        {
+            existing.Parameters.AddWithValue("$k", (int)e.Kind);
+            existing.Parameters.AddWithValue("$m", (int)e.Metric);
+            existing.Parameters.AddWithValue("$s", e.Start.ToUnixTimeMilliseconds());
+            if (existing.ExecuteScalar() is long id)
+            {
+                Execute("UPDATE episode SET end_ts=$end, peak=$peak, culprit=$culprit, share=$share, title=$title, sentence=$sentence WHERE id=$id",
+                    ("$end",e.End.ToUnixTimeMilliseconds()),("$peak",e.PeakValue),("$culprit",(object?)e.Culprit ?? DBNull.Value),
+                    ("$share",e.CulpritShare),("$title",title),("$sentence",sentence),("$id",id));
+                return id;
+            }
+        }
         using var cmd = Command("""
             INSERT INTO episode(kind, resource, metric, start_ts, end_ts, peak, usual, culprit, share, title, sentence)
             VALUES ($k, $r, $m, $s, $e, $p, $u, $c, $sh, $ti, $se);
@@ -226,7 +259,7 @@ public sealed class SismoStore : IDisposable
     // ---------- Alertes ----------
 
     /// <summary>Aligne les alertes en base sur celles en cours ; renvoie les nouvelles (à notifier).</summary>
-    public IReadOnlyList<HardwareAlert> SyncAlerts(IReadOnlyList<HardwareAlert> current, DateTimeOffset now)
+    public IReadOnlyList<HardwareAlert> SyncAlerts(IReadOnlyList<HardwareAlert> current, DateTimeOffset now, IReadOnlySet<AlertKind>? unknown = null)
     {
         ArgumentNullException.ThrowIfNull(current);
         var open = new List<(long Id, AlertKind Kind, string Subject)>();
@@ -243,12 +276,22 @@ public sealed class SismoStore : IDisposable
         var raised = new List<HardwareAlert>();
         using var tx = _connection.BeginTransaction();
 
-        foreach (var o in open.Where(o => !current.Any(c => c.Kind == o.Kind && c.Subject == o.Subject)))
+        foreach (var o in open.Where(o => unknown?.Contains(o.Kind) != true && !current.Any(c => c.Kind == o.Kind && c.Subject == o.Subject)))
         {
             using var cmd = Command("UPDATE alert SET cleared = $now WHERE id = $id", tx);
             cmd.Parameters.AddWithValue("$now", ms);
             cmd.Parameters.AddWithValue("$id", o.Id);
             cmd.ExecuteNonQuery();
+        }
+
+        foreach (var c in current)
+        {
+            using var update = Command("UPDATE alert SET severity = $s, message = $m WHERE kind = $k AND subject = $su AND cleared IS NULL", tx);
+            update.Parameters.AddWithValue("$s", (int)c.Severity);
+            update.Parameters.AddWithValue("$m", c.Message);
+            update.Parameters.AddWithValue("$k", (int)c.Kind);
+            update.Parameters.AddWithValue("$su", c.Subject);
+            update.ExecuteNonQuery();
         }
 
         foreach (var c in current.Where(c => !open.Any(o => o.Kind == c.Kind && o.Subject == c.Subject)))

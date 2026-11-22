@@ -39,7 +39,7 @@ public sealed class AnomalyDetector
     public bool IsLearning(DateTimeOffset now) => now < LearningStartedAt + LearningPeriod;
 
     /// <summary>Anomalies en cours depuis au moins <see cref="MinDuration"/> (pour le score de santé).</summary>
-    public int OpenCount(DateTimeOffset now) => _open.Values.Count(a => now - a.Start >= MinDuration);
+    public int OpenCount(DateTimeOffset now) => _open.Values.Count(a => a.Last - a.Start >= MinDuration && now - a.Last <= TimeSpan.FromSeconds(15));
 
     /// <summary>Traite un instantané ; renvoie les anomalies qui viennent de se terminer.</summary>
     public IReadOnlyList<Episode> Process(Snapshot snapshot)
@@ -51,6 +51,12 @@ public sealed class AnomalyDetector
 
         foreach (var metric in Watched)
         {
+            if (_open.TryGetValue(metric, out var previous) &&
+                (snapshot.Timestamp - previous.Last > TimeSpan.FromSeconds(15) || snapshot.Timestamp < previous.Last || snapshot[metric] is null))
+            {
+                if (previous.Last - previous.Start >= MinDuration) closed.Add(previous.ToEpisode(metric));
+                _open.Remove(metric);
+            }
             var value = snapshot[metric];
             if (value is null)
             {
@@ -87,6 +93,16 @@ public sealed class AnomalyDetector
         return closed;
     }
 
+    public IReadOnlyList<Episode> CurrentEpisodes() => _open.Where(kv => kv.Value.Last - kv.Value.Start >= MinDuration).Select(kv => kv.Value.ToEpisode(kv.Key)).ToList();
+
+    public IReadOnlyList<Episode> Flush()
+    {
+        var result = _open.Where(kv => kv.Value.Last - kv.Value.Start >= MinDuration)
+            .Select(kv => kv.Value.ToEpisode(kv.Key)).ToList();
+        _open.Clear();
+        return result;
+    }
+
     private static Resource ResourceOf(MetricKind metric) => metric switch
     {
         MetricKind.CpuPercent or MetricKind.CpuTemperatureC => Resource.Cpu,
@@ -114,7 +130,7 @@ public sealed class AnomalyDetector
             {
                 var weight = ResourceOf(metric) switch
                 {
-                    Resource.Cpu or Resource.Gpu => p.CpuPercent,
+                    Resource.Cpu => p.CpuPercent,
                     Resource.Memory => p.WorkingSetBytes,
                     Resource.Disk => p.DiskBytesPerSecond,
                     _ => 0,

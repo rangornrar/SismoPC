@@ -42,6 +42,12 @@ public sealed class SaturationDetector
 
         foreach (var rule in _rules)
         {
+            if (_states.TryGetValue(rule, out var previous) &&
+                (snapshot.Timestamp - previous.LastAbove > TimeSpan.FromSeconds(15) || snapshot.Timestamp < previous.LastAbove || snapshot[rule.Metric] is null))
+            {
+                if (previous.ToEpisode(rule) is { } interrupted) closed.Add(interrupted);
+                _states.Remove(rule);
+            }
             var value = snapshot[rule.Metric];
             if (value is null)
             {
@@ -73,6 +79,8 @@ public sealed class SaturationDetector
     }
 
     /// <summary>Clôt les épisodes en cours (arrêt du service).</summary>
+    public IReadOnlyList<Episode> CurrentEpisodes() => _states.Select(kv => kv.Value.ToEpisode(kv.Key)).OfType<Episode>().ToList();
+
     public IReadOnlyList<Episode> Flush()
     {
         var closed = _states

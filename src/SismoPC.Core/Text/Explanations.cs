@@ -29,7 +29,7 @@ public static class Explanations
         };
     }
 
-    /// <summary>Phrase d'explication, par exemple : « De 14:05 à 14:11, le disque était occupé à plus de 90 %, surtout par TiWorker.exe (92 % de l'activité). »</summary>
+    /// <summary>Phrase d'explication, par exemple : « De 14:05 à 14:11, le disque était occupé à plus de 90 %, surtout par TiWorker.exe (92 % de l'activité des programmes relevés). »</summary>
     public static string Sentence(Episode episode, TimeZoneInfo? zone = null)
     {
         ArgumentNullException.ThrowIfNull(episode);
@@ -52,7 +52,7 @@ public static class Explanations
 
         var who = episode.Culprit is null
             ? string.Empty
-            : string.Format(Fr, ", surtout par {0} ({1:0} % de l'activité)", episode.Culprit, episode.CulpritShare * 100);
+            : string.Format(Fr, ", surtout par {0} ({1:0} % de l'activité des programmes relevés)", episode.Culprit, episode.CulpritShare * 100);
 
         return $"De {start} à {end}, {what}{who}.";
     }

@@ -48,6 +48,15 @@ public class IpcTests
         back.Metrics["CpuPercent"].ShouldBe(6);
     }
 
+    [Fact]
+    public async Task Trames_bornees_et_lignes_valides()
+    {
+        using var valid = new StringReader("bonjour\r\n");
+        (await PipeProtocol.ReadFrameAsync(valid, CancellationToken.None)).ShouldBe("bonjour");
+        using var oversized = new StringReader(new string('a', PipeProtocol.MaxFrameLength + 1));
+        await Should.ThrowAsync<IOException>(() => PipeProtocol.ReadFrameAsync(oversized, CancellationToken.None));
+    }
+
     private static async Task WaitUntil(Func<bool> condition)
     {
         for (var i = 0; i < 100 && !condition(); i++)

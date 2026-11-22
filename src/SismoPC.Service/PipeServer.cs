@@ -12,6 +12,8 @@ namespace SismoPC.Service;
 /// </summary>
 public sealed partial class PipeServer(EventHub hub, StatusProvider status, ILogger<PipeServer> logger) : BackgroundService
 {
+    private readonly SemaphoreSlim _clients = new(16);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -38,7 +40,13 @@ public sealed partial class PipeServer(EventHub hub, StatusProvider status, ILog
                 break;
             }
 
-            _ = Task.Run(() => HandleAsync(pipe, stoppingToken), stoppingToken);
+            if (!_clients.Wait(0, CancellationToken.None)) { await pipe.DisposeAsync().ConfigureAwait(false); continue; }
+            _ = Task.Run(async () =>
+            {
+                try { await HandleAsync(pipe, stoppingToken).ConfigureAwait(false); }
+                catch (Exception ex) { LogPipeError(logger, ex); }
+                finally { _clients.Release(); }
+            }, CancellationToken.None);
         }
     }
 
@@ -73,8 +81,12 @@ public sealed partial class PipeServer(EventHub hub, StatusProvider status, ILog
             {
                 try
                 {
-                    while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
+                    using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    while (true)
                     {
+                        requestTimeout.CancelAfter(TimeSpan.FromSeconds(10));
+                        var line = await PipeProtocol.ReadFrameAsync(reader, requestTimeout.Token).ConfigureAwait(false);
+                        if (line is null) break;
                         var request = Parse(line);
                         switch (request?.Type)
                         {

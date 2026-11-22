@@ -18,14 +18,37 @@ public sealed partial class HomePage : Page
         double? LastBootSeconds,
         string? System);
 
+    private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromSeconds(10) };
+    private bool _loading;
+    private bool _active;
+
     public HomePage()
     {
         InitializeComponent();
+        _refresh.Tick += async (_, _) => await RefreshAsync();
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        _active = true;
+        _refresh.Start();
+        await RefreshAsync();
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        _active = false;
+        _refresh.Stop();
+        base.OnNavigatedFrom(e);
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_loading || !_active) return;
+        _loading = true;
+        try
+        {
         Root.Children.Clear();
         Root.Children.Add(UiKit.Header("Accueil", "Chargement…"));
         Root.Children.Add(new ProgressRing { IsActive = true, HorizontalAlignment = HorizontalAlignment.Left });
@@ -44,7 +67,10 @@ public sealed partial class HomePage : Page
         });
         var status = await statusTask;
 
-        Render(status, data);
+        if (status is not null && DateTimeOffset.UtcNow - status.At > TimeSpan.FromSeconds(60)) status = null;
+        if (_active) Render(status, data);
+        }
+        finally { _loading = false; }
     }
 
     private void Render(LiveStatus? status, HomeData? data)
@@ -61,6 +87,7 @@ public sealed partial class HomePage : Page
             return;
         }
 
+        Root.Children.Add(UiKit.Text(status is null ? "Mesures indisponibles ou périmées" : $"Dernier relevé : {status.At.ToLocalTime():HH:mm:ss}", secondary: true));
         if (status is { Learning: true })
         {
             var days = Math.Max(1, (int)Math.Ceiling((status.LearningEndsAt - DateTimeOffset.UtcNow).TotalDays));
@@ -97,14 +124,14 @@ public sealed partial class HomePage : Page
         ring.Children.Add(new ProgressRing
         {
             IsIndeterminate = false,
-            Value = status?.Score ?? 0,
+            Value = status is null || status.ScoreLabel.StartsWith("Surveillance partielle", StringComparison.Ordinal) ? 0 : status.Score,
             Maximum = 100,
             Width = 140,
             Height = 140,
             Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Palette.Accent(this)),
         });
         var number = UiKit.Stack(0,
-            UiKit.Text(status is null ? "—" : status.Score.ToString(UiKit.Fr), "TitleLargeTextBlockStyle"),
+            UiKit.Text(status is null || status.ScoreLabel.StartsWith("Surveillance partielle", StringComparison.Ordinal) ? "—" : status.Score.ToString(UiKit.Fr), "TitleLargeTextBlockStyle"),
             UiKit.Text("sur 100", "CaptionTextBlockStyle", secondary: true));
         number.HorizontalAlignment = HorizontalAlignment.Center;
         number.VerticalAlignment = VerticalAlignment.Center;
@@ -141,13 +168,13 @@ public sealed partial class HomePage : Page
         {
             Tile("Processeur",
                 Describe(Metric(MetricKind.CpuTemperatureC), Metric(MetricKind.CpuPercent), "d'utilisation"),
-                Metric(MetricKind.CpuTemperatureC) >= 95 ? Status.Critical : Status.Good),
+                Metric(MetricKind.CpuTemperatureC) >= 95 ? Status.Critical : Metric(MetricKind.CpuTemperatureC) is null ? Status.Info : Status.Good),
             Tile("Carte graphique",
                 Describe(Metric(MetricKind.GpuTemperatureC), Metric(MetricKind.GpuPercent), "d'utilisation"),
-                Metric(MetricKind.GpuTemperatureC) >= 90 ? Status.Critical : Status.Good),
+                Metric(MetricKind.GpuTemperatureC) >= 90 ? Status.Critical : Metric(MetricKind.GpuTemperatureC) is null ? Status.Info : Status.Good),
             Tile("Mémoire",
                 Metric(MetricKind.MemoryUsedPercent) is { } mem ? $"{UiKit.Percent(mem)} utilisée" : "—",
-                Status.Good),
+                Metric(MetricKind.MemoryUsedPercent) is null ? Status.Info : Status.Good),
         };
 
         foreach (var disk in data?.Disks ?? [])
@@ -163,7 +190,7 @@ public sealed partial class HomePage : Page
                 parts.Add(UiKit.Celsius(t));
             }
 
-            var state = disk.PredictsFailure ? Status.Critical : disk.WearPercent >= 80 ? Status.Warning : Status.Good;
+            var state = status is null ? Status.Info : disk.PredictsFailure ? Status.Critical : disk.WearPercent >= 80 ? Status.Warning : Status.Good;
             tiles.Add(Tile(disk.Name, parts.Count > 0 ? string.Join(" · ", parts) : "Santé SMART", state));
         }
 
@@ -204,6 +231,7 @@ public sealed partial class HomePage : Page
         {
             Status.Critical => "Critique",
             Status.Warning => "Attention",
+            Status.Info => "Inconnu",
             _ => "OK",
         };
         var head = new Grid();

@@ -2,7 +2,7 @@
 
 **SismoPC enregistre en continu l'activité et la santé de ton PC Windows, repère les ralentissements et les anomalies, et explique en clair ce qui s'est passé.**
 
-> Projet en développement (v0.1). Licence MIT.
+> Projet en développement (préversion v0.3.1). Licence MIT.
 
 ## Ce que fait SismoPC
 
@@ -47,3 +47,14 @@ Une version publiée se fait en poussant un tag `vX.Y.Z`, ou en envoyant `main` 
 ## Licences tierces
 
 Voir [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+
+## Fiabilité et limites
+
+La collecte distingue les capteurs absents : le score est qualifié de surveillance partielle ; une alerte thermique ne disparaît pas faute de mesure. L'accueil se rafraîchit toutes les dix secondes et rejette un statut vieux de plus d'une minute. Les courbes utilisent les résumés disponibles après purge du détail.
+
+Le responsable d'une anomalie GPU reste indéterminé en l'absence de mesure GPU par processus. Les parts attribuées sont relatives aux programmes relevés, pas à l'ensemble de l'activité de Windows. Les épisodes confirmés sont sauvegardés toutes les minutes ; un arrêt brutal peut perdre la dernière minute. Les notifications d'épisode restent émises à la clôture.
+
+Les disques sont distingués par leur numéro de série, leur identifiant unique ou, en dernier recours, leur port. Les anciennes données restent conservées avec leurs noms historiques : une identité perdue dans une ancienne version ne peut pas être reconstruite automatiquement.
+
+Voir [la recette Windows et le pilote](docs/recette-et-pilote.md), [l'exploitation](docs/exploitation.md) et [les décisions d'architecture](docs/architecture.md). La validation en VM et les observations de vrais utilisateurs restent nécessaires avant une version stable. Aucun pourcentage de précision des anomalies n'est établi.

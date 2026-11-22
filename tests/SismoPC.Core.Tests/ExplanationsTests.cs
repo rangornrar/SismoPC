@@ -14,7 +14,7 @@ public class ExplanationsTests
 
         Explanations.Title(episode).ShouldBe("Disque saturé pendant 6 min");
         Explanations.Sentence(episode, TimeZoneInfo.Utc)
-            .ShouldBe("De 14:05 à 14:11, le disque était occupé à plus de 90 %, surtout par TiWorker.exe (92 % de l'activité).");
+            .ShouldBe("De 14:05 à 14:11, le disque était occupé à plus de 90 %, surtout par TiWorker.exe (92 % de l'activité des programmes relevés).");
     }
 
     [Fact]

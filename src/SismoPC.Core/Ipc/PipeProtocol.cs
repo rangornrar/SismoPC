@@ -10,6 +10,21 @@ namespace SismoPC.Core.Ipc;
 /// </summary>
 public static class PipeProtocol
 {
+    public const int MaxFrameLength = 16384;
+
+    public static async Task<string?> ReadFrameAsync(TextReader reader, CancellationToken token)
+    {
+        var buffer = new char[1];
+        var line = new System.Text.StringBuilder();
+        while (await reader.ReadAsync(buffer.AsMemory(), token).ConfigureAwait(false) != 0)
+        {
+            if (buffer[0] == '\n') return line.ToString().TrimEnd('\r');
+            if (line.Length >= MaxFrameLength) throw new IOException("Trame IPC trop longue");
+            line.Append(buffer[0]);
+        }
+        return null;
+    }
+
     public const string PipeName = "SismoPC";
 
     /// <summary>Identifiant d'application Windows, utilisé pour les notifications et le raccourci du menu Démarrer.</summary>

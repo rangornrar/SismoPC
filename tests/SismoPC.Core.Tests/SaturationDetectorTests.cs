@@ -62,4 +62,13 @@ public class SaturationDetectorTests
 
         detector.Process(snapshot).ShouldBeEmpty();
     }
+
+    [Fact]
+    public void Longue_interruption_ne_prouve_pas_saturation_continue()
+    {
+        var detector = NewDetector();
+        detector.Process(Snap(T0, MetricKind.CpuPercent, 99));
+        detector.Process(Snap(T0.AddMinutes(10), MetricKind.CpuPercent, 99)).ShouldBeEmpty();
+        detector.Process(Snap(T0.AddMinutes(10).AddSeconds(5), MetricKind.CpuPercent, 1)).ShouldBeEmpty();
+    }
 }

@@ -63,6 +63,7 @@ Name: "pawnio"; Description: "Ouvrir la page de téléchargement du pilote PawnI
 Name: "{commonappdata}\{#AppName}"; Permissions: users-readexec
 
 [Files]
+Source: "service-control.ps1"; Flags: dontcopy
 Source: "{#PublishDir}\service\*"; DestDir: "{app}\Service"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PublishDir}\app\*"; DestDir: "{app}\App"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
@@ -86,7 +87,7 @@ Root: HKCR; Subkey: "sismopc\shell\open\command"; ValueType: string; ValueName: 
 Filename: "{sys}\sc.exe"; Parameters: "create {#ServiceName} binPath= ""\""{app}\Service\SismoPC.Service.exe\"""" start= delayed-auto DisplayName= ""SismoPC"""; Flags: runhidden waituntilterminated; StatusMsg: "Installation du service SismoPC…"
 Filename: "{sys}\sc.exe"; Parameters: "description {#ServiceName} ""Enregistre l'activité et la santé du PC pour SismoPC."""; Flags: runhidden waituntilterminated
 Filename: "{sys}\sc.exe"; Parameters: "failure {#ServiceName} reset= 86400 actions= restart/60000/restart/60000/restart/300000"; Flags: runhidden waituntilterminated
-Filename: "{sys}\sc.exe"; Parameters: "start {#ServiceName}"; Flags: runhidden waituntilterminated; StatusMsg: "Démarrage du service SismoPC…"
+Filename: "{sys}\sc.exe"; Parameters: "start {#ServiceName}"; Flags: runhidden waituntilterminated; StatusMsg: "Démarrage du service SismoPC…"; AfterInstall: VerifyService
 ; Notifications dès maintenant, dans la session de l'utilisateur qui installe.
 Filename: "{app}\Service\SismoPC.Notifier.exe"; Flags: nowait runasoriginaluser
 Filename: "https://github.com/namazso/PawnIO.Setup/releases"; Flags: shellexec runasoriginaluser nowait; Tasks: pawnio
@@ -100,17 +101,35 @@ Filename: "{sys}\sc.exe"; Parameters: "delete {#ServiceName}"; Flags: runhidden 
 
 [Code]
 { Avant une mise à jour : arrête le service et les programmes, puis supprime le service pour le recréer proprement. }
+function ServiceControl(Action: String): Boolean;
+var
+  Code: Integer;
+begin
+  ExtractTemporaryFile('service-control.ps1');
+  Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\service-control.ps1') + '" -Action ' + Action,
+    '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Result := Result and (Code = 0);
+end;
+
+procedure VerifyService;
+begin
+  if not ServiceControl('verify') then
+    RaiseException('Le service SismoPC ne répond pas. Consulter les journaux dans ProgramData\SismoPC\logs et relancer l''installation.');
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Code: Integer;
 begin
+  Result := '';
+  if not ServiceControl('stop') then
+  begin
+    Result := 'Impossible d''arrêter ou supprimer le service. Fermer les outils Services Windows puis réessayer ; redémarrer Windows si nécessaire.';
+    Exit;
+  end;
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM SismoPC.Notifier.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM SismoPC.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
-  Exec(ExpandConstant('{sys}\sc.exe'), 'stop {#ServiceName}', '', SW_HIDE, ewWaitUntilTerminated, Code);
-  Sleep(2000);
-  Exec(ExpandConstant('{sys}\sc.exe'), 'delete {#ServiceName}', '', SW_HIDE, ewWaitUntilTerminated, Code);
-  Sleep(1000);
-  Result := '';
 end;
 
 { À la désinstallation : proposer de conserver l'historique (spécifications, exigences non fonctionnelles). }

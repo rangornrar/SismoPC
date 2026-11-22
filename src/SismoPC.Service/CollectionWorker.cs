@@ -47,7 +47,13 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
     {
         // Laisse Windows considérer le service comme démarré avant l'inventaire (WMI peut prendre quelques secondes).
         await Task.Yield();
-        Initialize();
+        try { Initialize(); }
+        catch (Exception ex)
+        {
+            LogTickFailed(logger, ex);
+            Environment.Exit(1); // Permet la récupération du SCM après une erreur fatale.
+            return;
+        }
         LogStarted(logger, SismoPaths.Database, _temperatures!.IsAvailable);
 
         using var timer = new PeriodicTimer(Interval);
@@ -130,6 +136,12 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
             Save(episode, now);
         }
 
+        if (_tick % 12 == 0)
+        {
+            foreach (var active in _saturation.CurrentEpisodes().Concat(_anomalies.CurrentEpisodes()))
+                store.AddEpisode(active, Explanations.Title(active), Explanations.Sentence(active));
+        }
+
         if (now - _lastInventory >= TimeSpan.FromDays(1))
         {
             RefreshInventory(now);
@@ -199,7 +211,11 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
     {
         _lastAlertSync = now;
         var state = new HardwareState(_lastTemps.Cpu, _lastTemps.Gpu, _disks, _volumes);
-        foreach (var alert in _store!.SyncAlerts(HardwareAlertRules.Evaluate(state), now))
+        var unknown = new HashSet<AlertKind>();
+        if (_lastTemps.Cpu is null) unknown.Add(AlertKind.CpuTemperature);
+        if (_lastTemps.Gpu is null) unknown.Add(AlertKind.GpuTemperature);
+        if (_disks.Count == 0) unknown.UnionWith([AlertKind.DiskTemperature, AlertKind.DiskSmartFailure, AlertKind.SsdWear]);
+        foreach (var alert in _store!.SyncAlerts(HardwareAlertRules.Evaluate(state), now, unknown))
         {
             LogAlert(logger, alert.Subject, alert.Message);
             hub.Publish(new PipeEvent(
@@ -224,7 +240,7 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
             now,
             snapshot.Metrics.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
             score.Value,
-            score.Label,
+            _lastTemps.Cpu is null || _lastTemps.Gpu is null || _disks.Count == 0 || !snapshot.Metrics.ContainsKey(MetricKind.CpuPercent) || !snapshot.Metrics.ContainsKey(MetricKind.MemoryUsedPercent) || !snapshot.Metrics.ContainsKey(MetricKind.DiskActivePercent) ? "Surveillance partielle - capteurs indisponibles" : score.Label,
             score.Penalties,
             anomalies.IsLearning(now),
             anomalies.LearningStartedAt + anomalies.LearningPeriod,
@@ -298,7 +314,7 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
         }
 
         var now = DateTimeOffset.UtcNow;
-        foreach (var episode in _saturation?.Flush() ?? [])
+        foreach (var episode in (_saturation?.Flush() ?? []).Concat(_anomalies?.Flush() ?? []))
         {
             Save(episode, now);
         }

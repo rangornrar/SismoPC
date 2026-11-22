@@ -233,12 +233,12 @@ public static class InventoryCollector
         var reliability = WmiHelper.Query(storage, "SELECT DeviceId, PowerOnHours, StartStopCycleCount FROM MSFT_StorageReliabilityCounter")
             .GroupBy(r => r.Text("DeviceId"), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-        var physical = WmiHelper.Query(storage, "SELECT DeviceId, FriendlyName, BusType, MediaType, Size, FirmwareVersion, SpindleSpeed FROM MSFT_PhysicalDisk");
+        var physical = WmiHelper.Query(storage, "SELECT UniqueId, SerialNumber, DeviceId, FriendlyName, BusType, MediaType, Size, FirmwareVersion, SpindleSpeed FROM MSFT_PhysicalDisk");
         var now = DateTime.Now;
 
         foreach (var disk in physical)
         {
-            var name = disk.Text("FriendlyName");
+            var name = DiskIdentity.Label(disk.Text("FriendlyName"), disk.Text("UniqueId"), disk.Text("SerialNumber"), disk.Text("DeviceId"));
             var d = new Details();
             d.Add("Marque", HardwareNames.DiskBrand(name));
             d.Add("Capacité", disk.Long("Size") is { } size and > 0 ? HardwareNames.DiskSize(size) : null);

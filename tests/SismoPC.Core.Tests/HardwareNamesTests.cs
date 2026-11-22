@@ -45,4 +45,10 @@ public class HardwareNamesTests
         HardwareNames.LinkSpeed(1e9).ShouldBe("1 Gbit/s");
         HardwareNames.LinkSpeed(2.5e9).ShouldBe("2,5 Gbit/s");
     }
+    [Fact]
+    public void Disques_identiques_sont_distincts_et_numero_de_serie_prioritaire()
+    {
+        DiskIdentity.Label("SSD", "id1", "serie1", "0").ShouldNotBe(DiskIdentity.Label("SSD", "id2", "serie2", "1"));
+        DiskIdentity.Label("SSD", "id1", "serie1", "0").ShouldBe(DiskIdentity.Label("SSD", "id2", "serie1", "2"));
+    }
 }

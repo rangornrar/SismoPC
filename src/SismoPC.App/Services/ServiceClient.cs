@@ -42,17 +42,18 @@ public static class ServiceClient
     {
         try
         {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             using var pipe = new NamedPipeClientStream(".", PipeProtocol.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-            await pipe.ConnectAsync(ConnectTimeoutMs).ConfigureAwait(false);
+            await pipe.ConnectAsync(ConnectTimeoutMs, timeout.Token).ConfigureAwait(false);
             using var reader = new StreamReader(pipe, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: -1, leaveOpen: true);
             var writer = new StreamWriter(pipe, new UTF8Encoding(false), bufferSize: -1, leaveOpen: true) { AutoFlush = true };
             await using (writer.ConfigureAwait(false))
             {
                 await writer.WriteLineAsync(PipeProtocol.Serialize(request)).ConfigureAwait(false);
-                return await reader.ReadLineAsync().ConfigureAwait(false);
+                return await PipeProtocol.ReadFrameAsync(reader, timeout.Token).ConfigureAwait(false);
             }
         }
-        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is OperationCanceledException or TimeoutException or IOException or UnauthorizedAccessException)
         {
             return null;
         }

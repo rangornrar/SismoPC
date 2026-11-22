@@ -73,4 +73,24 @@ public class AnomalyDetectorTests
         range.Low.ShouldBe(-2);
         range.High.ShouldBe(8);
     }
+
+    [Fact]
+    public void Anomalie_confirmee_est_cloturee_a_arret()
+    {
+        var (detector, _) = Trained(3);
+        foreach (var sample in Series(T0, MetricKind.CpuPercent, Enumerable.Repeat(40.0, 73))) detector.Process(sample);
+        detector.CurrentEpisodes().ShouldHaveSingleItem();
+        detector.Flush().ShouldHaveSingleItem();
+        detector.Flush().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void GPU_ne_designe_pas_un_responsable_CPU()
+    {
+        var baseline = new Baseline();
+        for (var i=0; i<200; i++) baseline.Learn(MetricKind.GpuPercent, T0, 1);
+        var detector = new AnomalyDetector(baseline, T0.AddDays(-20)) { TimeZone = TimeZoneInfo.Utc };
+        foreach (var sample in Series(T0, MetricKind.GpuPercent, Enumerable.Repeat(90.0, 73), Proc("cpu.exe", cpu: 90))) detector.Process(sample);
+        detector.Flush().ShouldHaveSingleItem().Culprit.ShouldBeNull();
+    }
 }
