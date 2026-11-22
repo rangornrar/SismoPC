@@ -211,4 +211,62 @@ public sealed class SismoStoreTests : IDisposable
         stored.Title.ShouldBe("clos");
         stored.Episode.End.ShouldBe(T0.AddMinutes(8));
     }
+
+    [Fact]
+    public void Trois_ecrans_dont_deux_identiques_restent_distincts()
+    {
+        var details = new Dictionary<string, string>();
+        var screens = new[] {
+            new HardwareComponent("Écran", "iiyama", details) { Identity = "DISPLAY/IIYAMA/1" },
+            new HardwareComponent("Écran", "iiyama", details) { Identity = "DISPLAY/IIYAMA/2" },
+            new HardwareComponent("Écran", "Autre", details) { Identity = "DISPLAY/AUTRE/1" }
+        };
+        // Ancienne collecte sans identité conservée comme historique, non doublonnée à l'affichage.
+        _store.UpsertComponents([new HardwareComponent("Écran", "iiyama", details)], T0.AddDays(-1));
+        _store.UpsertComponents(screens, T0);
+        _store.ReadComponents().Count.ShouldBe(3);
+        _store.ReadComponents().Count(c => c.Name == "iiyama").ShouldBe(2);
+        _store.UpsertComponents(screens.Take(2), T0.AddDays(1));
+        _store.ReadComponents().Count.ShouldBe(2);
+    }
+
+    [Theory]
+    [InlineData(10, 60)]
+    [InlineData(100, 3600)]
+    public void Resolution_des_agregats_est_transmise_au_graphe(int days, int seconds)
+    {
+        var old = DateTimeOffset.UtcNow.AddDays(-days);
+        _store.WriteSnapshot(Snap(old, 70));
+        _store.Aggregate(old.AddMinutes(-1));
+        _store.Purge(DateTimeOffset.UtcNow, new RetentionPolicy());
+        _store.ReadSeries(MetricKind.CpuPercent, old.AddMinutes(-15), old.AddMinutes(15))
+            .ShouldHaveSingleItem().Resolution.ShouldBe(TimeSpan.FromSeconds(seconds));
+    }
+
+    [Fact]
+    public void Mise_a_jour_schema_1_conserve_inventaire_historique()
+    {
+        var legacyPath = _path + ".legacy.db";
+        try
+        {
+            using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={legacyPath};Pooling=False"))
+            {
+                connection.Open();
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "PRAGMA user_version=1; CREATE TABLE component(type TEXT,name TEXT,details TEXT,first_seen INTEGER,last_seen INTEGER,PRIMARY KEY(type,name)); INSERT INTO component VALUES ('Écran','iiyama','{}',1,1);";
+                cmd.ExecuteNonQuery();
+            }
+            using var upgraded = new SismoStore(legacyPath);
+            upgraded.ReadComponents().ShouldHaveSingleItem().Name.ShouldBe("iiyama");
+            upgraded.UpsertComponents([
+                new HardwareComponent("Écran", "iiyama", new Dictionary<string,string>()) { Identity = "one" },
+                new HardwareComponent("Écran", "iiyama", new Dictionary<string,string>()) { Identity = "two" }
+            ], T0);
+            upgraded.ReadComponents().Count.ShouldBe(2);
+        }
+        finally
+        {
+            foreach (var suffix in new[] { "", "-wal", "-shm" }) File.Delete(legacyPath + suffix);
+        }
+    }
 }

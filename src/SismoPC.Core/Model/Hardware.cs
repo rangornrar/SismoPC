@@ -25,7 +25,10 @@ public sealed record VolumeSpace(string Letter, long TotalBytes, long FreeBytes)
 /// <param name="Type">Famille : Processeur, Carte graphique, Mémoire, Disque, Carte mère, BIOS, Système.</param>
 /// <param name="Name">Désignation lisible.</param>
 /// <param name="Details">Caractéristiques, libellé → valeur.</param>
-public sealed record HardwareComponent(string Type, string Name, IReadOnlyDictionary<string, string> Details);
+public sealed record HardwareComponent(string Type, string Name, IReadOnlyDictionary<string, string> Details)
+{
+    public string? Identity { get; init; }
+}
 
 /// <summary>Photographie de l'état matériel utilisée pour les alertes.</summary>
 public sealed record HardwareState(

@@ -3,7 +3,7 @@ namespace SismoPC.Data;
 /// <summary>Schéma de la base SQLite. Les dates sont stockées en millisecondes Unix (UTC).</summary>
 internal static class Schema
 {
-    public const int Version = 1;
+    public const int Version = 2;
 
     public const string Create = """
         CREATE TABLE IF NOT EXISTS sample (
@@ -76,6 +76,16 @@ internal static class Schema
             first_seen INTEGER NOT NULL,
             last_seen  INTEGER NOT NULL,
             PRIMARY KEY (type, name)
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS component_instance (
+            type TEXT NOT NULL,
+            identity TEXT NOT NULL,
+            name TEXT NOT NULL,
+            details TEXT NOT NULL,
+            first_seen INTEGER NOT NULL,
+            last_seen INTEGER NOT NULL,
+            PRIMARY KEY(type, identity)
         ) WITHOUT ROWID;
 
         CREATE TABLE IF NOT EXISTS baseline (

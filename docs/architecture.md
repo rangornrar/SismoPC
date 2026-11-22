@@ -1,6 +1,6 @@
 # Architecture et spécifications reconstituées
 
-Ce document décrit les sources 0.3.1. Le besoin historique est reconstitué à partir du README ; les références US/ADR présentes dans les commentaires ne constituent pas un dossier de spécifications fourni.
+Ce document décrit les sources 0.3.2. Le besoin historique est reconstitué à partir du README ; les références US/ADR présentes dans les commentaires ne constituent pas un dossier de spécifications fourni.
 
 ## Flux
 
@@ -18,3 +18,12 @@ Collecteurs Windows → instantané toutes les 5 secondes → SQLite et détecte
 ## Vérification
 
 `dotnet test SismoPC.slnx -c Release` valide Core et Data. `dotnet build SismoPC.slnx -c Release` compile également collecteurs, service, Notifier et interface. Les tests ne valident pas les capteurs réels, l'accessibilité, les droits installés, les toasts ni les opérations du SCM. Voir la recette pour ces contrôles.
+
+
+## Correctifs d'affichage 0.3.2
+
+Les écrans sont identifiés par leur InstanceName WMI et conservent leur nom commercial à l'affichage. Le schéma 2 ajoute component_instance sans supprimer les lignes historiques du schéma 1. Le passage à une version antérieure nécessite de restaurer une sauvegarde compatible.
+
+L'accueil conserve son arbre de contrôles et met à jour les valeurs après la lecture asynchrone. Les épisodes utilisent leur identifiant pour conserver le bon lien en cas de changement de liste.
+
+La chronologie affiche à zéro les intervalles sans relevé, sans modifier les valeurs SQLite. Chaque point conserve sa résolution (5 secondes, minute ou heure) pour distinguer un trou d'une cadence agrégée. La réduction graphique conserve minima, maxima et transitions. Un zéro ajouté n'est pas une température réellement mesurée ; l'interface précise que le PC peut être éteint, en veille ou sans collecte. Les interruptions plus courtes qu'un agrégat ancien ne sont pas reconstituables après purge du détail.

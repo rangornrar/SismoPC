@@ -382,12 +382,13 @@ public static class InventoryCollector
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var index = 1;
-        foreach (var monitor in WmiHelper.Query(wmi, "SELECT InstanceName, ManufacturerName, UserFriendlyName, YearOfManufacture, WeekOfManufacture FROM WmiMonitorID"))
+        foreach (var monitor in WmiHelper.Query(wmi, "SELECT InstanceName, ManufacturerName, UserFriendlyName, SerialNumberID, YearOfManufacture, WeekOfManufacture FROM WmiMonitorID"))
         {
             var model = HardwareNames.EdidText(monitor.TryGetValue("UserFriendlyName", out var n) ? n as ushort[] : null);
             var brand = HardwareNames.MonitorBrand(HardwareNames.EdidText(monitor.TryGetValue("ManufacturerName", out var m) ? m as ushort[] : null));
             var d = new Details();
             d.Add("Marque", brand);
+            d.Add("Numéro de série", HardwareNames.EdidText(monitor.TryGetValue("SerialNumberID", out var serial) ? serial as ushort[] : null));
             if (sizes.TryGetValue(monitor.Text("InstanceName"), out var size)
                 && HardwareNames.DiagonalInches(size.Long("MaxHorizontalImageSize"), size.Long("MaxVerticalImageSize")) is { } inches)
             {
@@ -403,7 +404,7 @@ public static class InventoryCollector
                 clues.Add(new DateClue($"Écran {name}", made, DateClueKind.Manufactured, "fabrication de l'écran (il peut être plus ancien ou plus récent que le PC)"));
             }
 
-            yield return new("Écran", name, d.Values);
+            yield return new HardwareComponent("Écran", name, d.Values) { Identity = monitor.Text("InstanceName") is { Length: > 0 } instance ? instance : $"monitor-{index}" };
             index++;
         }
     }

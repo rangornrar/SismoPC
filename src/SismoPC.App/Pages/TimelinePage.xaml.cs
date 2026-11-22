@@ -25,7 +25,7 @@ public sealed partial class TimelinePage : Page
         (MetricKind.CpuPercent, "Processeur", "%", 0, 100),
         (MetricKind.MemoryUsedPercent, "Mémoire", "%", 0, 100),
         (MetricKind.DiskActivePercent, "Disque", "% actif", 0, 100),
-        (MetricKind.CpuTemperatureC, "Température processeur", "°C", 30, 100),
+        (MetricKind.CpuTemperatureC, "Température processeur", "°C", 0, 100),
     ];
 
     private readonly List<LineChart> _charts = [];
@@ -118,7 +118,7 @@ public sealed partial class TimelinePage : Page
             _chartsPanel.Children.Add(grid);
         }
 
-        _chartsPanel.Children.Add(UiKit.Text("Clique sur une courbe pour voir les programmes actifs à cet instant.", "CaptionTextBlockStyle", secondary: true));
+        _chartsPanel.Children.Add(UiKit.Text("Clique sur une courbe pour voir les programmes actifs à cet instant. Les périodes sans relevé (PC éteint, veille ou collecte arrêtée) sont affichées à zéro.", "CaptionTextBlockStyle", secondary: true));
         Root.Children.Add(UiKit.Card(_chartsPanel));
         Root.Children.Add(UiKit.Card(_instantPanel));
         Root.Children.Add(UiKit.Card(UiKit.Stack(8, UiKit.SectionTitle("Épisodes et événements de la période"), _episodesPanel)));
@@ -148,7 +148,8 @@ public sealed partial class TimelinePage : Page
         var bands = data.Episodes.Select(ep => (ep.Episode.Start, ep.Episode.End)).ToList();
         for (var i = 0; i < Rows.Length; i++)
         {
-            var points = data.Series[i].Select(p => new ChartPoint(p.Timestamp, p.Max)).ToList();
+            var points = TimelineSeries.WithZeroGaps(data.Series[i].Select(p => new TimedValue(p.Timestamp, p.Max, p.Resolution)), from, _to)
+                .Select(p => new ChartPoint(p.At, p.Value)).ToList();
             var max = Rows[i].Metric == MetricKind.CpuTemperatureC && points.Count > 0
                 ? Math.Max(Rows[i].Max, points.Max(p => p.Value) + 5)
                 : Rows[i].Max;

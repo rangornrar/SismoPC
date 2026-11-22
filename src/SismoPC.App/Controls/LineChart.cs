@@ -111,12 +111,14 @@ public sealed partial class LineChart : UserControl
             var line = new Polyline { Stroke = new SolidColorBrush(color), StrokeThickness = 1.5, StrokeLineJoin = PenLineJoin.Round };
             var fill = new Polygon { Fill = new SolidColorBrush(ColorHelper.FromArgb(28, color.R, color.G, color.B)) };
 
-            // Réduction : un point (le maximum, pour ne pas masquer les pics) par pixel.
+            // Réduction : extrêmes et transitions par pixel, pour conserver les pics et les retours à zéro.
             var buckets = Math.Max(2, (int)w);
-            var reduced = _points
-                .GroupBy(p => (int)Math.Clamp(X(p.At, w), 0, buckets - 1))
+            var reduced = _points.Select((point, index) => (point, index))
+                .GroupBy(p => (int)Math.Clamp(X(p.point.At, w), 0, buckets - 1))
                 .OrderBy(g => g.Key)
-                .Select(g => new Point(g.Key, Y(g.Max(p => p.Value), h)))
+                .SelectMany(g => new[] { g.First(), g.MinBy(p => p.point.Value), g.MaxBy(p => p.point.Value), g.Last() }
+                    .DistinctBy(p => p.index).OrderBy(p => p.index)
+                    .Select(p => new Point(g.Key, Y(p.point.Value, h))))
                 .ToList();
 
             fill.Points.Add(new Point(reduced[0].X, h));

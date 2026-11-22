@@ -49,9 +49,11 @@ public sealed partial class HomePage : Page
         _loading = true;
         try
         {
-        Root.Children.Clear();
-        Root.Children.Add(UiKit.Header("Accueil", "Chargement…"));
-        Root.Children.Add(new ProgressRing { IsActive = true, HorizontalAlignment = HorizontalAlignment.Left });
+        if (Root.Children.Count == 0)
+        {
+            Root.Children.Add(UiKit.Header("Accueil", "Chargement…"));
+            Root.Children.Add(new ProgressRing { IsActive = true, HorizontalAlignment = HorizontalAlignment.Left });
+        }
 
         var statusTask = ServiceClient.GetStatusAsync();
         var data = await DataAccess.ReadAsync(store =>
@@ -75,23 +77,24 @@ public sealed partial class HomePage : Page
 
     private void Render(LiveStatus? status, HomeData? data)
     {
-        Root.Children.Clear();
-        Root.Children.Add(UiKit.Header("Accueil", data?.System ?? "SismoPC"));
+        var content = new StackPanel();
+        content.Children.Add(UiKit.Header("Accueil", data?.System ?? "SismoPC"));
 
         if (status is null && data is null)
         {
-            Root.Children.Add(UiKit.Banner(
+            content.Children.Add(UiKit.Banner(
                 "Le service SismoPC ne répond pas",
                 "La collecte ne tourne pas : réinstalle SismoPC ou démarre le service « SismoPC » dans les services Windows.",
                 InfoBarSeverity.Error));
+            LiveRefresh.Update(Root, content);
             return;
         }
 
-        Root.Children.Add(UiKit.Text(status is null ? "Mesures indisponibles ou périmées" : $"Dernier relevé : {status.At.ToLocalTime():HH:mm:ss}", secondary: true));
+        content.Children.Add(UiKit.Text(status is null ? "Mesures indisponibles ou périmées" : $"Dernier relevé : {status.At.ToLocalTime():HH:mm:ss}", secondary: true));
         if (status is { Learning: true })
         {
             var days = Math.Max(1, (int)Math.Ceiling((status.LearningEndsAt - DateTimeOffset.UtcNow).TotalDays));
-            Root.Children.Add(UiKit.Banner(
+            content.Children.Add(UiKit.Banner(
                 "Apprentissage de la normale",
                 $"SismoPC apprend le comportement habituel de ce PC : encore {days} jour{(days > 1 ? "s" : "")} avant les premières alertes d'anomalie.",
                 InfoBarSeverity.Informational));
@@ -105,17 +108,18 @@ public sealed partial class HomePage : Page
         Grid.SetColumn(components, 1);
         row.Children.Add(score);
         row.Children.Add(components);
-        Root.Children.Add(row);
+        content.Children.Add(row);
 
         foreach (var alert in data?.Alerts ?? [])
         {
-            Root.Children.Add(UiKit.Banner(
+            content.Children.Add(UiKit.Banner(
                 alert.Subject,
                 alert.Message,
                 alert.Severity == AlertSeverity.Critical ? InfoBarSeverity.Error : InfoBarSeverity.Warning));
         }
 
-        Root.Children.Add(EpisodesCard(data?.Episodes ?? []));
+        content.Children.Add(EpisodesCard(data?.Episodes ?? []));
+        LiveRefresh.Update(Root, content);
     }
 
     private Border ScoreCard(LiveStatus? status)
@@ -305,6 +309,7 @@ public sealed partial class HomePage : Page
 
         var button = new Button
         {
+            Tag = ep.Id,
             Content = grid,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,

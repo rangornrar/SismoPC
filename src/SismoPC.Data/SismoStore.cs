@@ -21,7 +21,10 @@ public sealed record RetentionPolicy
 public sealed record StoredEpisode(long Id, Episode Episode, string Title, string Sentence);
 
 /// <summary>Point agrégé d'une courbe.</summary>
-public readonly record struct SeriesPoint(DateTimeOffset Timestamp, double Min, double Avg, double Max);
+public readonly record struct SeriesPoint(DateTimeOffset Timestamp, double Min, double Avg, double Max)
+{
+    public TimeSpan Resolution { get; init; } = TimeSpan.FromSeconds(5);
+}
 
 /// <summary>
 /// Accès à la base SQLite de SismoPC. Le service est le seul à écrire ; l'interface ouvre la base en lecture seule.
@@ -135,25 +138,25 @@ public sealed class SismoStore : IDisposable
         var span = to - from;
         var sql = span <= TimeSpan.FromHours(6)
             ? """
-              SELECT ts, value, value, value FROM sample WHERE metric=$m AND ts BETWEEN $f AND $t
+              SELECT ts, value, value, value, 5000 FROM sample WHERE metric=$m AND ts BETWEEN $f AND $t
               UNION ALL
-              SELECT ts,min,avg,max FROM sample_minute a WHERE metric=$m AND ts BETWEEN ($f / 60000) * 60000 AND $t
+              SELECT ts,min,avg,max,60000 FROM sample_minute a WHERE metric=$m AND ts BETWEEN ($f / 60000) * 60000 AND $t
                 AND NOT EXISTS (SELECT 1 FROM sample d WHERE d.metric=$m AND d.ts >= a.ts AND d.ts < a.ts+60000)
               UNION ALL
-              SELECT ts,min,avg,max FROM sample_hour a WHERE metric=$m AND ts BETWEEN ($f / 3600000) * 3600000 AND $t
+              SELECT ts,min,avg,max,3600000 FROM sample_hour a WHERE metric=$m AND ts BETWEEN ($f / 3600000) * 3600000 AND $t
                 AND NOT EXISTS (SELECT 1 FROM sample_minute d WHERE d.metric=$m AND d.ts >= a.ts AND d.ts < a.ts+3600000)
                 AND NOT EXISTS (SELECT 1 FROM sample d WHERE d.metric=$m AND d.ts >= a.ts AND d.ts < a.ts+3600000)
               ORDER BY ts
               """
             : span <= TimeSpan.FromDays(30)
                 ? """
-                  SELECT ts,min,avg,max FROM sample_minute WHERE metric=$m AND ts BETWEEN ($f / 60000) * 60000 AND $t
+                  SELECT ts,min,avg,max,60000 FROM sample_minute WHERE metric=$m AND ts BETWEEN ($f / 60000) * 60000 AND $t
                   UNION ALL
-                  SELECT ts,min,avg,max FROM sample_hour a WHERE metric=$m AND ts BETWEEN ($f / 3600000) * 3600000 AND $t
+                  SELECT ts,min,avg,max,3600000 FROM sample_hour a WHERE metric=$m AND ts BETWEEN ($f / 3600000) * 3600000 AND $t
                     AND NOT EXISTS (SELECT 1 FROM sample_minute d WHERE d.metric=$m AND d.ts >= a.ts AND d.ts < a.ts+3600000)
                   ORDER BY ts
                   """
-                : "SELECT ts,min,avg,max FROM sample_hour WHERE metric=$m AND ts BETWEEN ($f / 3600000) * 3600000 AND $t ORDER BY ts";
+                : "SELECT ts,min,avg,max,3600000 FROM sample_hour WHERE metric=$m AND ts BETWEEN ($f / 3600000) * 3600000 AND $t ORDER BY ts";
 
         using var cmd = Command(sql);
         cmd.Parameters.AddWithValue("$m", (int)metric);
@@ -165,7 +168,7 @@ public sealed class SismoStore : IDisposable
         {
             points.Add(new SeriesPoint(
                 DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(0)),
-                reader.GetDouble(1), reader.GetDouble(2), reader.GetDouble(3)));
+                reader.GetDouble(1), reader.GetDouble(2), reader.GetDouble(3)) { Resolution = TimeSpan.FromMilliseconds(reader.GetInt64(4)) });
         }
 
         return points;
@@ -333,11 +336,15 @@ public sealed class SismoStore : IDisposable
         using var tx = _connection.BeginTransaction();
         foreach (var c in components)
         {
-            using var cmd = Command("""
+            using var cmd = Command(c.Identity is not null ? """
+                INSERT INTO component_instance(type, identity, name, details, first_seen, last_seen) VALUES ($t, $id, $n, $d, $now, $now)
+                ON CONFLICT(type, identity) DO UPDATE SET name=excluded.name, details=excluded.details, last_seen=excluded.last_seen
+                """ : """
                 INSERT INTO component(type, name, details, first_seen, last_seen) VALUES ($t, $n, $d, $now, $now)
                 ON CONFLICT(type, name) DO UPDATE SET details = excluded.details, last_seen = excluded.last_seen
                 """, tx);
             cmd.Parameters.AddWithValue("$t", c.Type);
+            if (c.Identity is not null) cmd.Parameters.AddWithValue("$id", c.Identity);
             cmd.Parameters.AddWithValue("$n", c.Name);
             cmd.Parameters.AddWithValue("$d", JsonSerializer.Serialize(c.Details));
             cmd.Parameters.AddWithValue("$now", ms);
@@ -351,16 +358,21 @@ public sealed class SismoStore : IDisposable
     {
         // Inventaire courant uniquement : un composant retiré reste en base (historique) mais n'est plus affiché.
         using var cmd = Command("""
-            SELECT type, name, details FROM component
-            WHERE last_seen = (SELECT MAX(last_seen) FROM component)
-            ORDER BY type, name
+            WITH inventory AS (
+                SELECT type,name,details,last_seen,NULL AS identity FROM component
+                UNION ALL
+                SELECT type,name,details,last_seen,identity FROM component_instance
+            )
+            SELECT type,name,details,identity FROM inventory
+            WHERE last_seen=(SELECT MAX(last_seen) FROM inventory)
+            ORDER BY type,name,identity
             """);
         using var r = cmd.ExecuteReader();
         var list = new List<HardwareComponent>();
         while (r.Read())
         {
             var details = JsonSerializer.Deserialize<Dictionary<string, string>>(r.GetString(2)) ?? [];
-            list.Add(new HardwareComponent(r.GetString(0), r.GetString(1), details));
+            list.Add(new HardwareComponent(r.GetString(0), r.GetString(1), details) { Identity = r.IsDBNull(3) ? null : r.GetString(3) });
         }
 
         return list;
