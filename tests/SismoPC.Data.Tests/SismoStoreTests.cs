@@ -269,4 +269,23 @@ public sealed class SismoStoreTests : IDisposable
             foreach (var suffix in new[] { "", "-wal", "-shm" }) File.Delete(legacyPath + suffix);
         }
     }
+
+    [Fact]
+    public void Dernier_etat_des_disques_ne_duplique_pas_les_anciens_libelles()
+    {
+        _store.AddDiskHealth([new DiskHealth("SSD",true,false,2,40,100)],T0);
+        _store.AddDiskHealth([new DiskHealth("SSD [id]",true,false,2,40,101)],T0.AddHours(1));
+        _store.ReadLatestDiskHealth().ShouldHaveSingleItem().Name.ShouldBe("SSD [id]");
+    }
+
+    [Fact]
+    public void Signalement_et_observations_sont_relus_sans_zeros_artificiels()
+    {
+        _store.WriteSnapshot(Snap(T0, 72));
+        _store.AddSystemEvent(T0,"manual","Signalement");
+        _store.ReadSystemEvents(T0.AddMinutes(-1),T0.AddMinutes(1)).ShouldHaveSingleItem().Kind.ShouldBe("manual");
+        var cpu=_store.ReadObservations(T0.AddMinutes(-1),T0.AddMinutes(1)).Single(x=>x.Metric==MetricKind.CpuPercent);
+        cpu.Peak.ShouldBe(72);
+        cpu.Samples.ShouldBe(1);
+    }
 }

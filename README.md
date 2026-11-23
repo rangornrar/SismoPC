@@ -2,16 +2,20 @@
 
 **SismoPC enregistre en continu l'activité et la santé de ton PC Windows, repère les ralentissements et les anomalies, et explique en clair ce qui s'est passé.**
 
-> Projet en développement (préversion v0.3.2). Licence MIT.
+> Projet en développement (préversion v0.4.0). Licence MIT.
 
 ## Ce que fait SismoPC
 
 - **Inventaire** de la configuration : processeur, carte graphique, mémoire, disques, carte mère, BIOS, Windows.
 - **Enregistrement continu** par un service Windows léger, même sans session ouverte.
-- **Épisodes de ralentissement** : une ressource saturée plus de 30 s, avec le programme responsable.
+- **Épisodes de ralentissement** : une ressource saturée plus de 30 s, avec les programmes contributeurs observés.
 - **Anomalies** : une mesure qui sort durablement de la normale de *ce* PC (après 14 jours d'apprentissage).
 - **Santé du matériel** : usure des SSD, alertes SMART, températures, espace disque.
 - **Tendances** : le PC se dégrade-t-il au fil des mois ?
+- **Accueil lisible** : situation actuelle, action utile, incidents récents et quatre indicateurs essentiels.
+- **« Mon PC vient de ralentir »** : enregistrement du signalement et analyse des dix minutes précédentes, retrouvable ensuite.
+- **Rapports PDF et HTML** : aperçu, bilan de période ou d'incident ; noms du PC, programmes, configuration et identifiants exclus par défaut.
+- **Présence discrète** : icône près de l'horloge, accès au signalement et au bilan ; rappel hebdomadaire facultatif et désactivé par défaut.
 - **Tout reste en local** : aucune donnée envoyée sur internet.
 
 ## Organisation du code
@@ -53,8 +57,16 @@ Voir [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 La collecte distingue les capteurs absents : le score est qualifié de surveillance partielle ; une alerte thermique ne disparaît pas faute de mesure. L'accueil se rafraîchit toutes les dix secondes et rejette un statut vieux de plus d'une minute. Les courbes utilisent les résumés disponibles après purge du détail.
 
-Le responsable d'une anomalie GPU reste indéterminé en l'absence de mesure GPU par processus. Les parts attribuées sont relatives aux programmes relevés, pas à l'ensemble de l'activité de Windows. Les épisodes confirmés sont sauvegardés toutes les minutes ; un arrêt brutal peut perdre la dernière minute. Les notifications d'épisode restent émises à la clôture.
+Le responsable d'une anomalie GPU reste indéterminé en l'absence de mesure GPU par processus. Un programme contributeur ne constitue pas une cause démontrée. Les parts attribuées sont relatives aux programmes relevés, pas à l'ensemble de l'activité de Windows. Les épisodes confirmés sont sauvegardés toutes les minutes ; un arrêt brutal peut perdre la dernière minute. Les notifications d'épisode restent émises à la clôture.
 
 Les disques sont distingués par leur numéro de série, leur identifiant unique ou, en dernier recours, leur port. Les anciennes données restent conservées avec leurs noms historiques : une identité perdue dans une ancienne version ne peut pas être reconstruite automatiquement.
 
 Voir [la recette Windows et le pilote](docs/recette-et-pilote.md), [l'exploitation](docs/exploitation.md) et [les décisions d'architecture](docs/architecture.md). La validation en VM et les observations de vrais utilisateurs restent nécessaires avant une version stable. Aucun pourcentage de précision des anomalies n'est établi.
+
+## Comprendre et partager un incident
+
+Depuis l'accueil ou le menu de l'icône près de l'horloge, choisissez **Mon PC vient de ralentir**. SismoPC conserve l'heure du signalement, examine les dix minutes précédentes et propose des actions selon les observations disponibles. Retrouvez ce signalement sur l'accueil ou dans la chronologie. Une absence de mesure reste une absence de preuve.
+
+Dans **Rapports**, choisissez 24 heures, 7 jours ou 30 jours, vérifiez l'aperçu puis enregistrez en PDF ou HTML. Depuis un incident, le rapport porte sur sa période. Les quatre options d'inclusion sont réinitialisées à chaque ouverture et aucun document n'est envoyé automatiquement. L'aperçu et le PDF utilisent Microsoft Edge WebView2 ; si ce runtime est indisponible, l'export HTML reste proposé.
+
+Les courbes indiquent leurs graduations, les heures et les valeurs au survol. Les flèches gauche/droite permettent de choisir un instant au clavier. Les périodes sans relevé sont tracées à zéro, avec une indication explicite : ces zéros ne sont pas des mesures.

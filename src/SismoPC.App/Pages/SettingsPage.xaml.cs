@@ -25,12 +25,13 @@ public sealed partial class SettingsPage : Page
         var settings = await DataAccess.ReadAsync(store => (
             Anomaly: store.GetSetting(SettingKeys.NotifyAnomaly),
             Slowdown: store.GetSetting(SettingKeys.NotifySlowdown),
+            Weekly: store.GetSetting(SettingKeys.NotifyWeekly),
             Size: store.DatabaseSizeBytes()));
         var status = await statusTask;
 
         var left = UiKit.Stack(20, ServiceCard(status), DetectionCard(status), ScoreCard());
         var right = UiKit.Stack(20,
-            NotificationsCard(settings.Anomaly != "false", settings.Slowdown == "true", status is not null),
+            NotificationsCard(settings.Anomaly != "false", settings.Slowdown == "true", settings.Weekly == "true", status is not null),
             RetentionCard(settings.Size));
         var grid = new Grid { ColumnSpacing = 20 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -89,12 +90,13 @@ public sealed partial class SettingsPage : Page
         return UiKit.Card(panel);
     }
 
-    private static Border NotificationsCard(bool anomalies, bool slowdowns, bool serviceAvailable)
+    private static Border NotificationsCard(bool anomalies, bool slowdowns, bool weekly, bool serviceAvailable)
     {
         var panel = UiKit.Stack(6, UiKit.SectionTitle("Notifications"));
         panel.Children.Add(UiKit.Text("Les alertes matérielles (température, risque de panne, usure, espace disque) sont toujours notifiées.", secondary: true));
         panel.Children.Add(Toggle("Anomalies", "Comportement inhabituel pour ce PC", SettingKeys.NotifyAnomaly, anomalies, serviceAvailable));
         panel.Children.Add(Toggle("Ralentissements", "Une notification au plus par heure", SettingKeys.NotifySlowdown, slowdowns, serviceAvailable));
+        panel.Children.Add(Toggle("Bilan hebdomadaire", "Une notification discrète pour ouvrir votre bilan des 7 derniers jours", SettingKeys.NotifyWeekly, weekly, serviceAvailable));
         return UiKit.Card(panel);
     }
 

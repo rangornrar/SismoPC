@@ -38,6 +38,18 @@ public static class ServiceClient
         (await SendAsync(new PipeRequest(RequestTypes.IgnoreEpisode, id.ToString(System.Globalization.CultureInfo.InvariantCulture))).ConfigureAwait(false))
             ?.Contains("ok", StringComparison.Ordinal) == true;
 
+    public static async Task<DateTimeOffset?> MarkIncidentAsync()
+    {
+        var response = await SendAsync(new PipeRequest(RequestTypes.MarkIncident)).ConfigureAwait(false);
+        if (response is null) return null;
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(response);
+            return json.RootElement.TryGetProperty("at", out var at) ? at.GetDateTimeOffset() : null;
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or FormatException) { return null; }
+    }
+
     private static async Task<string?> SendAsync(PipeRequest request)
     {
         try

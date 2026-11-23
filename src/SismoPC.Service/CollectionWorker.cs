@@ -162,6 +162,17 @@ public sealed partial class CollectionWorker(EventHub hub, StatusProvider status
         {
             SyncAlerts(now);
             PublishStatus(now, snapshot);
+            if (hub.SubscriberCount > 0 && Setting(SettingKeys.NotifyWeekly, defaultValue: false))
+            {
+                var previous = store.GetSetting("weekly.last");
+                if (!DateTimeOffset.TryParse(previous, CultureInfo.InvariantCulture, DateTimeStyles.None, out var last))
+                    store.SetSetting("weekly.last", now.ToString("O", CultureInfo.InvariantCulture));
+                else if (now - last >= TimeSpan.FromDays(7))
+                {
+                    store.SetSetting("weekly.last", now.ToString("O", CultureInfo.InvariantCulture));
+                    hub.Publish(new PipeEvent("weekly", "info", "Votre bilan SismoPC est prêt", "Retrouvez les observations et les incidents enregistrés ces 7 derniers jours.", Target: "reports"));
+                }
+            }
         }
 
         if (now - _lastAggregate >= TimeSpan.FromMinutes(1))

@@ -460,7 +460,7 @@ public sealed class SismoStore : IDisposable
     {
         using var cmd = Command("""
             SELECT d.name, d.wear, d.temp, d.hours, d.failing, d.ssd FROM disk_health d
-            JOIN (SELECT name, MAX(ts) AS ts FROM disk_health GROUP BY name) last ON last.name = d.name AND last.ts = d.ts
+            WHERE d.ts = (SELECT MAX(ts) FROM disk_health)
             ORDER BY d.name
             """);
         using var r = cmd.ExecuteReader();
@@ -552,6 +552,14 @@ public sealed class SismoStore : IDisposable
             .Where(File.Exists)
             .Sum(p => new FileInfo(p).Length);
     }
+
+    /// <summary>Maximum réellement enregistré par métrique, sans inclure les zéros graphiques.</summary>
+    public IReadOnlyList<MetricObservation> ReadObservations(DateTimeOffset from, DateTimeOffset to) =>
+        Enum.GetValues<MetricKind>().Select(metric =>
+        {
+            var points = ReadSeries(metric, from, to);
+            return new MetricObservation(metric, points.Count == 0 ? 0 : points.Max(p => p.Max), points.Count);
+        }).ToList();
 
     // ---------- Réglages ----------
 

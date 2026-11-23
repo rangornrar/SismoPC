@@ -53,6 +53,9 @@ public sealed partial class PipeServer(EventHub hub, StatusProvider status, ILog
     private static NamedPipeServerStream CreatePipe()
     {
         var security = new PipeSecurity();
+        // Le créateur doit pouvoir ouvrir les instances suivantes, y compris en exécution console.
+        if (WindowsIdentity.GetCurrent().User is { } owner)
+            security.AddAccessRule(new PipeAccessRule(owner, PipeAccessRights.FullControl, AccessControlType.Allow));
         security.AddAccessRule(new PipeAccessRule(
             new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
         security.AddAccessRule(new PipeAccessRule(
@@ -98,6 +101,13 @@ public sealed partial class PipeServer(EventHub hub, StatusProvider status, ILog
                                 await writer.WriteLineAsync(status.Current is { } s
                                     ? PipeProtocol.Serialize(s)
                                     : "{\"type\":\"starting\"}").ConfigureAwait(false);
+                                break;
+
+                            case RequestTypes.MarkIncident:
+                                var at = DateTimeOffset.UtcNow;
+                                using (var store = new SismoPC.Data.SismoStore(SismoPaths.Database))
+                                    store.AddSystemEvent(at, "manual", "Ralentissement signalé par l'utilisateur");
+                                await writer.WriteLineAsync(PipeProtocol.Serialize(new { type = "ok", at })).ConfigureAwait(false);
                                 break;
 
                             case RequestTypes.SetSetting:
@@ -148,6 +158,8 @@ public sealed partial class PipeServer(EventHub hub, StatusProvider status, ILog
 
         using var store = new SismoPC.Data.SismoStore(SismoPaths.Database);
         store.SetSetting(key, value);
+        if (key == SettingKeys.NotifyWeekly && value == "true")
+            store.SetSetting("weekly.last", DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
         return true;
     }
 

@@ -34,3 +34,13 @@ Après correction des priorités et recette minimale, proposer le pilote à des 
 Fiche à remplir : `date;version;machine_anonymisee;scenario;incident_connu;alerte;interpretation;action;cpu_service;memoire_service;taille_donnees;latence_affichage;preuve;decision`.
 
 Décision suivante : corriger les incidents matériels et les mauvaises interprétations, ou élargir progressivement le pilote si la collecte est fiable et les explications comprises. Aucun trafic, revenu, prix ou taux de succès n'est supposé. Préparer une présentation publique après les captures et résultats réels ; ne pas publier une démonstration simulée comme expérience utilisateur observée.
+
+## Parcours 0.4.0 : recette du 23 novembre 2026
+
+Sur une base et un canal IPC de test distincts de l'installation, le paquet autonome a permis de parcourir l'accueil, l'enregistrement et la reprise d'un signalement, son analyse, le rapport d'incident et le bilan de période. L'export PDF A4 produit trois pages sur le jeu de recette ; les pages ont été rendues en PNG et inspectées, et le texte extrait vérifie le masquage du nom du PC et des programmes. Le HTML est testé pour l'échappement, l'inclusion explicite et l'absence de fuite par les phrases d'épisodes historiques.
+
+La chronologie a été contrôlée en plages de 24 heures et d'une heure : graduations, pics, retours à zéro, indication « Sans relevé », curseur partagé et déplacement à la flèche droite. Une activation `sismopc://home` restaure la fenêtre réduite et conserve une seule instance graphique. Les mêmes boutons restent présents après rafraîchissement de l'accueil.
+
+Compléter la recette manuelle avec : écran étroit, thèmes clair et contraste élevé, mise à l'échelle 150/200 %, lecteur d'écran, export vers un dossier refusé et annulation, menu de l'icône, affichage et clic de la notification hebdomadaire, installation et mise à jour sur un Windows propre. Le démarrage du Notifier et le rappel reçu sur le canal ne prouvent pas l'affichage effectif d'un toast par Windows.
+
+Pour un pilote utilisateur, demander sans guider les clics : « votre PC a ralenti il y a une minute ; retrouvez ce qui a été observé, puis préparez un document à partager sans vos noms de programmes ». Observer réussite, hésitations et compréhension de l'incertitude. Aucune amélioration chiffrée d'ergonomie ou de fidélisation n'est revendiquée avant ce pilote.

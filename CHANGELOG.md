@@ -1,5 +1,16 @@
 # Changements
 
+## 0.4.0
+
+- Accueil centré sur la situation, l'action utile, les incidents récents et quatre mesures compactes.
+- Signalement manuel d'un ralentissement, sauvegardé par le service et réexaminable depuis l'accueil ou la chronologie ; analyse des dix minutes précédentes.
+- Observations, actions et incertitudes séparées ; vocabulaire de contribution plutôt que causalité affirmée.
+- Rapports locaux de période ou d'incident, aperçu WebView2, export PDF/HTML et informations sensibles exclues par défaut.
+- Courbes graduées, valeurs au survol, curseur partagé et sélection au clavier.
+- Icône de notification avec accès directs ; bilan hebdomadaire sur option, instance unique de l'interface et réactivation des liens.
+- État actuel des disques fondé sur le dernier relevé, sans afficher les anciennes identités comme des composants actuels.
+- Recette séparée via un dossier de données et un canal IPC spécifiques, sans modification de l'installation existante.
+
 ## 0.3.2
 
 - Écrans de même modèle conservés séparément grâce à leur identité WMI ; migration additive de l'inventaire.

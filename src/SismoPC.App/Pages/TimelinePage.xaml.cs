@@ -58,7 +58,7 @@ public sealed partial class TimelinePage : Page
 
     private void BuildLayout()
     {
-        Root.Children.Add(UiKit.Header("Chronologie", "Remonte le temps : chaque courbe, chaque épisode, chaque changement sur le PC"));
+        Root.Children.Add(UiKit.Header("Chronologie", "Retrouvez les mesures, les épisodes et les changements sur votre PC."));
 
         var bar = new SelectorBar();
         foreach (var (label, span) in Ranges)
@@ -100,11 +100,30 @@ public sealed partial class TimelinePage : Page
         Grid.SetColumn(nav, 1);
         toolbar.Children.Add(bar);
         toolbar.Children.Add(nav);
+        var compact = false;
+        toolbar.SizeChanged += (_, _) =>
+        {
+            var narrow = toolbar.ActualWidth < 850;
+            if (compact == narrow) return;
+            compact = narrow;
+            toolbar.ColumnDefinitions.Clear(); toolbar.RowDefinitions.Clear();
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            if (compact)
+            {
+                toolbar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                toolbar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                toolbar.RowSpacing = 8;
+            }
+            else toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(nav, compact ? 0 : 1); Grid.SetRow(nav, compact ? 1 : 0);
+        };
         Root.Children.Add(toolbar);
 
         foreach (var row in Rows)
         {
-            var chart = new LineChart();
+            var chart = new LineChart { Unit = row.Unit };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chart, $"Courbe {row.Name}. Flèches gauche et droite pour choisir un instant.");
+            chart.CursorMoved += (_, at) => { foreach (var other in _charts) other.SetCursor(at); };
             chart.TimeSelected += async (_, at) => await ShowInstantAsync(at);
             _charts.Add(chart);
 
@@ -118,7 +137,7 @@ public sealed partial class TimelinePage : Page
             _chartsPanel.Children.Add(grid);
         }
 
-        _chartsPanel.Children.Add(UiKit.Text("Clique sur une courbe pour voir les programmes actifs à cet instant. Les périodes sans relevé (PC éteint, veille ou collecte arrêtée) sont affichées à zéro.", "CaptionTextBlockStyle", secondary: true));
+        _chartsPanel.Children.Add(UiKit.Text("Cliquez sur une courbe pour choisir un instant, puis utilisez les flèches gauche et droite. Les périodes sans relevé (PC éteint, veille ou collecte arrêtée) sont affichées à zéro.", "CaptionTextBlockStyle", secondary: true));
         Root.Children.Add(UiKit.Card(_chartsPanel));
         Root.Children.Add(UiKit.Card(_instantPanel));
         Root.Children.Add(UiKit.Card(UiKit.Stack(8, UiKit.SectionTitle("Épisodes et événements de la période"), _episodesPanel)));
@@ -130,7 +149,7 @@ public sealed partial class TimelinePage : Page
     {
         var from = _to - _span;
         _periodLabel.Text = _span <= TimeSpan.FromHours(24)
-            ? $"{from.ToLocalTime().ToString("ddd d MMM HH:mm", UiKit.Fr)} → {_to.ToLocalTime():HH:mm}"
+            ? $"{from.ToLocalTime().ToString("ddd d MMM HH:mm", UiKit.Fr)} → {_to.ToLocalTime().ToString("ddd d MMM HH:mm", UiKit.Fr)}"
             : $"{from.ToLocalTime().ToString("d MMM", UiKit.Fr)} → {_to.ToLocalTime().ToString("d MMM", UiKit.Fr)}";
 
         var data = await DataAccess.ReadAsync(store => (
@@ -149,7 +168,7 @@ public sealed partial class TimelinePage : Page
         for (var i = 0; i < Rows.Length; i++)
         {
             var points = TimelineSeries.WithZeroGaps(data.Series[i].Select(p => new TimedValue(p.Timestamp, p.Max, p.Resolution)), from, _to)
-                .Select(p => new ChartPoint(p.At, p.Value)).ToList();
+                .Select(p => new ChartPoint(p.At, p.Value, p.Resolution > TimeSpan.Zero)).ToList();
             var max = Rows[i].Metric == MetricKind.CpuTemperatureC && points.Count > 0
                 ? Math.Max(Rows[i].Max, points.Max(p => p.Value) + 5)
                 : Rows[i].Max;
@@ -165,7 +184,13 @@ public sealed partial class TimelinePage : Page
         foreach (var ev in data.Events)
         {
             var label = ev.Kind == "boot" && ev.Value is { } s ? $"{ev.Label} ({s:0} s)" : ev.Label;
-            _episodesPanel.Children.Add(UiKit.Text($"{UiKit.When(ev.At)} · {label}", "CaptionTextBlockStyle", secondary: true));
+            if (ev.Kind == "manual")
+            {
+                var mark = new Button { Content = $"Votre signalement · {UiKit.When(ev.At)}", Tag = ev.At };
+                mark.Click += (_, _) => App.Window?.Navigate("incident", ev.At);
+                _episodesPanel.Children.Add(mark);
+            }
+            else _episodesPanel.Children.Add(UiKit.Text($"{UiKit.When(ev.At)} · {label}", "CaptionTextBlockStyle", secondary: true));
         }
 
         if (_episodesPanel.Children.Count == 0)
@@ -186,7 +211,7 @@ public sealed partial class TimelinePage : Page
         _instantPanel.Children.Add(UiKit.SectionTitle($"À {at.ToLocalTime():HH:mm}"));
         if (processes.Count == 0)
         {
-            _instantPanel.Children.Add(UiKit.Text("Le détail par programme n'est conservé que 7 jours.", secondary: true));
+            _instantPanel.Children.Add(UiKit.Text("Aucun relevé de programme suffisamment proche de cet instant. Le détail est conservé 7 jours.", secondary: true));
             return;
         }
 

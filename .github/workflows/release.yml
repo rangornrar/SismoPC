@@ -57,8 +57,13 @@ jobs:
 
           Empreinte SHA-256 : voir SHA256SUMS.txt.
           "@
+          $changelog = Get-Content CHANGELOG.md -Raw
+          $section = [regex]::Match($changelog, '(?ms)^## ' + [regex]::Escape($v) + '\s*\r?\n(?<body>.*?)(?=^## |\z)')
+          if ($section.Success) { $notes = "## Nouveautés`n`n" + $section.Groups['body'].Value.Trim() + "`n`n" + $notes }
+          $notesPath = Join-Path $env:RUNNER_TEMP 'sismopc-release-notes.md'
+          [IO.File]::WriteAllText($notesPath, $notes, [Text.UTF8Encoding]::new($false))
           $extra = @()
           if ($v.StartsWith('0.')) { $extra += '--prerelease' }
           $files = @(Get-ChildItem artifacts -Filter *.exe | ForEach-Object FullName) + 'artifacts/SHA256SUMS.txt'
-          gh release create '${{ steps.version.outputs.tag }}' @files --target '${{ github.sha }}' --title "SismoPC $v" --notes $notes @extra
+          gh release create '${{ steps.version.outputs.tag }}' @files --target '${{ github.sha }}' --title "SismoPC $v" --notes-file $notesPath @extra
           if ($LASTEXITCODE -ne 0) { throw 'Échec de la création de la release' }

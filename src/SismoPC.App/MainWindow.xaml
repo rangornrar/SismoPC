@@ -3,7 +3,7 @@
     x:Class="SismoPC.Ui.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="SismoPC">
+    Title="SismoPC — Votre PC, en clair">
 
     <Window.SystemBackdrop>
         <MicaBackdrop />
@@ -14,7 +14,7 @@
         PaneDisplayMode="Left"
         IsSettingsVisible="False"
         IsBackButtonVisible="Auto"
-        OpenPaneLength="240"
+        OpenPaneLength="210" PaneTitle="SismoPC"
         SelectionChanged="OnSelectionChanged"
         BackRequested="OnBackRequested">
 
@@ -42,6 +42,9 @@
         </NavigationView.MenuItems>
 
         <NavigationView.FooterMenuItems>
+            <NavigationViewItem Content="Rapports" Tag="reports">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE8A5;" /></NavigationViewItem.Icon>
+            </NavigationViewItem>
             <NavigationViewItem Content="Paramètres" Tag="settings">
                 <NavigationViewItem.Icon>
                     <FontIcon Glyph="&#xE713;" />

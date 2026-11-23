@@ -25,7 +25,7 @@ public static class PipeProtocol
         return null;
     }
 
-    public const string PipeName = "SismoPC";
+    public static string PipeName => Environment.GetEnvironmentVariable("SISMOPC_PIPE_NAME") ?? "SismoPC";
 
     /// <summary>Identifiant d'application Windows, utilisé pour les notifications et le raccourci du menu Démarrer.</summary>
     public const string AppUserModelId = "rangornrar.SismoPC";
@@ -47,6 +47,8 @@ public static class RequestTypes
     public const string Status = "status";
     public const string Subscribe = "subscribe";
     public const string SetSetting = "setSetting";
+    public const string MarkIncident = "markIncident";
+
     public const string IgnoreEpisode = "ignoreEpisode";
 }
 
@@ -54,12 +56,15 @@ public static class RequestTypes
 public static class SettingKeys
 {
     public const string NotifyAnomaly = "notify.anomaly";
+    public const string NotifyWeekly = "notify.weekly";
+
     public const string NotifySlowdown = "notify.slowdown";
 
     public static IReadOnlySet<string> Editable { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         NotifyAnomaly,
         NotifySlowdown,
+        NotifyWeekly,
     };
 }
 
@@ -70,7 +75,7 @@ public sealed record PipeRequest(string Type, string? Key = null, string? Value 
 /// <param name="Kind">« alert », « slowdown » ou « anomaly ».</param>
 /// <param name="Severity">« critical », « warning » ou « info ».</param>
 /// <param name="EpisodeId">Identifiant de l'épisode en base, pour ouvrir son détail.</param>
-public sealed record PipeEvent(string Kind, string Severity, string Title, string Message, long? EpisodeId = null);
+public sealed record PipeEvent(string Kind, string Severity, string Title, string Message, long? EpisodeId = null, string? Target = null);
 
 /// <summary>État en direct du PC, renvoyé à la requête « status ».</summary>
 public sealed record LiveStatus(

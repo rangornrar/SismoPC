@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using SismoPC.Core.Model;
+using SismoPC.Core.Health;
 using SismoPC.Ui.Controls;
 using SismoPC.Ui.Services;
 
@@ -56,16 +57,16 @@ public sealed partial class EpisodePage : Page
         var episode = data.Episode.Episode;
         var isAnomaly = episode.Kind == EpisodeKind.Anomaly;
 
-        var title = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        var title = new StackPanel { Spacing = 8 };
         title.Children.Add(UiKit.Text(data.Episode.Title, "TitleTextBlockStyle"));
         title.Children.Add(UiKit.Pill(isAnomaly ? "Anomalie" : "Ralentissement", isAnomaly ? Status.Info : Status.Warning, this));
         Root.Children.Add(title);
-        var sentence = UiKit.Text(data.Episode.Sentence, "BodyLargeTextBlockStyle");
+        var sentence = UiKit.Text(Core.Text.Explanations.Sentence(episode), "BodyLargeTextBlockStyle");
         sentence.MaxWidth = 820;
         sentence.HorizontalAlignment = HorizontalAlignment.Left;
         Root.Children.Add(sentence);
 
-        var chart = new LineChart { Height = 180 };
+        var chart = new LineChart { Height = 180, Unit = episode.Metric == MetricKind.DiskLatencyMs ? "ms" : episode.Metric is MetricKind.CpuTemperatureC or MetricKind.GpuTemperatureC ? "°C" : "%" };
         var points = data.Series.Select(p => new ChartPoint(p.Timestamp, p.Max)).ToList();
         var (min, max) = Range(episode.Metric, points);
         chart.SetData(points, data.From, data.To, min, max, SeriesIndex(episode.Resource), [(episode.Start, episode.End)]);
@@ -80,23 +81,37 @@ public sealed partial class EpisodePage : Page
         Grid.SetColumn(side, 1);
         layout.Children.Add(chartCard);
         layout.Children.Add(side);
+        void Adapt()
+        {
+            var narrow = Root.ActualWidth < 760;
+            layout.ColumnDefinitions.Clear(); layout.RowDefinitions.Clear();
+            layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(narrow ? 1 : 3, GridUnitType.Star) });
+            if (!narrow) layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+            layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            if (narrow) layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetColumn(side, narrow ? 0 : 1); Grid.SetRow(side, narrow ? 1 : 0);
+            layout.RowSpacing = 16;
+        }
+        Root.SizeChanged += (_, _) => Adapt();
+        Adapt();
         Root.Children.Add(layout);
     }
 
     private static Border CulpritCard(Episode episode)
     {
-        var panel = UiKit.Stack(8, UiKit.Text("RESPONSABLE PROBABLE", "CaptionTextBlockStyle", secondary: true));
+        var panel = UiKit.Stack(8, UiKit.Text("PROGRAMME CONTRIBUTEUR", "CaptionTextBlockStyle", secondary: true));
         if (episode.Culprit is null)
         {
-            panel.Children.Add(UiKit.Text("Aucun programme ne se distingue : la charge venait de Windows ou de plusieurs programmes à la fois.", secondary: true));
+            panel.Children.Add(UiKit.Text("Les relevés ne permettent pas de distinguer un programme contributeur. Cela ne prouve pas que Windows est responsable.", secondary: true));
         }
         else
         {
             panel.Children.Add(UiKit.Text(episode.Culprit, "SubtitleTextBlockStyle"));
-            panel.Children.Add(UiKit.Field("Part de l'activité", UiKit.Percent(episode.CulpritShare * 100)));
+            panel.Children.Add(UiKit.Field("Part parmi les programmes relevés", UiKit.Percent(episode.CulpritShare * 100)));
         }
 
         panel.Children.Add(UiKit.Field("Durée", Core.Text.Explanations.FormatDuration(episode.Duration)));
+        panel.Children.Add(UiKit.Text("Une contribution observée n'est pas une preuve de causalité.", "CaptionTextBlockStyle", secondary: true));
         return UiKit.Card(panel);
     }
 
@@ -116,15 +131,12 @@ public sealed partial class EpisodePage : Page
         return UiKit.Card(panel);
     }
 
-    private Border AdviceCard(long id, Episode episode)
+    private static Border AdviceCard(long id, Episode episode)
     {
-        var advice = episode.Resource switch
-        {
-            Resource.Disk => "Fréquent pendant une mise à jour ou une analyse antivirus. Si cela revient souvent hors de ces moments, surveille l'état du disque dans Matériel.",
-            Resource.Cpu => "Si le même programme revient souvent, vérifie ses réglages ou s'il se lance tout seul au démarrage.",
-            Resource.Memory => "Fermer les programmes inutiles libère de la mémoire. Si cela revient souvent, plus de mémoire peut aider.",
-            _ => "Si cet épisode se répète, observe la chronologie autour pour repérer ce qu'ils ont en commun.",
-        };
+        var finding = IncidentAnalysis.Explain(episode);
+        var advice = finding.Action;
+        var report = new Button { Content = "Préparer un rapport" };
+        report.Click += (_, _) => App.Window?.Navigate("reports", new ReportSelection(episode.Start.AddMinutes(-15), episode.End.AddMinutes(15), "Rapport d'incident"));
 
         var timeline = new Button { Content = "Voir sur la chronologie", Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
         timeline.Click += (_, _) => App.Window?.Navigate("timeline", episode.Start);
@@ -139,17 +151,18 @@ public sealed partial class EpisodePage : Page
             else
             {
                 ignore.IsEnabled = true;
-                ignore.Content = "Service indisponible, réessaie";
+                ignore.Content = "Service indisponible, réessayez";
             }
         };
 
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var buttons = new StackPanel { Spacing = 8 };
+        buttons.Children.Add(report);
         buttons.Children.Add(timeline);
         buttons.Children.Add(ignore);
-        return UiKit.Card(UiKit.Stack(10, UiKit.Text("À RETENIR", "CaptionTextBlockStyle", secondary: true), UiKit.Text(advice), buttons));
+        return UiKit.Card(UiKit.Stack(10, UiKit.Text("QUE FAIRE ?", "CaptionTextBlockStyle", secondary: true), UiKit.Text(finding.Observation), UiKit.Text(advice), buttons));
     }
 
-    private static (double Min, double Max) Range(MetricKind metric, IReadOnlyList<ChartPoint> points) => metric switch
+    private static (double Min, double Max) Range(MetricKind metric, List<ChartPoint> points) => metric switch
     {
         MetricKind.DiskLatencyMs or MetricKind.CpuTemperatureC or MetricKind.GpuTemperatureC or MetricKind.NetworkBytesPerSecond
             => (0, points.Count > 0 ? points.Max(p => p.Value) * 1.15 : 1),

@@ -9,7 +9,7 @@ namespace SismoPC.Ui.Services;
 public static class DataAccess
 {
     public static string DatabasePath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SismoPC", "sismopc.db");
+        Environment.GetEnvironmentVariable("SISMOPC_DATA_DIRECTORY") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SismoPC"), "sismopc.db");
 
     public static bool DatabaseExists => File.Exists(DatabasePath);
 

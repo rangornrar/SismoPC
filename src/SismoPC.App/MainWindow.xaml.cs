@@ -10,6 +10,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        if (Environment.GetEnvironmentVariable("SISMOPC_DATA_DIRECTORY") is not null) Title += " · environnement d’essai";
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 860));
         var icon = Path.Combine(AppContext.BaseDirectory, "SismoPC.ico");
         if (File.Exists(icon))
@@ -17,7 +18,14 @@ public sealed partial class MainWindow : Window
             AppWindow.SetIcon(icon);
         }
 
-        ContentFrame.Navigated += (_, _) => Nav.IsBackEnabled = ContentFrame.CanGoBack;
+        ContentFrame.Navigated += (_, e) =>
+        {
+            Nav.IsBackEnabled = ContentFrame.CanGoBack;
+            var tag = e.SourcePageType == typeof(HomePage) ? "home" : e.SourcePageType == typeof(TimelinePage) ? "timeline"
+                : e.SourcePageType == typeof(HardwarePage) ? "hardware" : e.SourcePageType == typeof(TrendsPage) ? "trends"
+                : e.SourcePageType == typeof(SettingsPage) ? "settings" : e.SourcePageType == typeof(ReportsPage) ? "reports" : null;
+            Nav.SelectedItem = Nav.MenuItems.Concat(Nav.FooterMenuItems).OfType<NavigationViewItem>().FirstOrDefault(item => Equals(item.Tag, tag));
+        };
         Nav.SelectedItem = Nav.MenuItems[0];
     }
 
@@ -26,6 +34,8 @@ public sealed partial class MainWindow : Window
     {
         var page = tag switch
         {
+            "incident" => typeof(IncidentPage),
+            "reports" => typeof(ReportsPage),
             "timeline" => typeof(TimelinePage),
             "hardware" => typeof(HardwarePage),
             "trends" => typeof(TrendsPage),
@@ -33,7 +43,8 @@ public sealed partial class MainWindow : Window
             "episode" => typeof(EpisodePage),
             _ => typeof(HomePage),
         };
-        ContentFrame.Navigate(page, parameter);
+        if (ContentFrame.CurrentSourcePageType != page || parameter is not null)
+            ContentFrame.Navigate(page, parameter);
     }
 
     /// <summary>Gère « sismopc://episode/42 » et « sismopc://home » passés en ligne de commande.</summary>
@@ -46,6 +57,7 @@ public sealed partial class MainWindow : Window
         }
 
         var parts = uri["sismopc://".Length..].Trim('/').Split('/');
+        if (parts.Length == 1 && parts[0] is "reports" or "incident" or "home") { Navigate(parts[0]); return; }
         if (parts.Length == 2 && parts[0] == "episode"
             && long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var id))
         {

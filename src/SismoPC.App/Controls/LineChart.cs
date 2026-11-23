@@ -10,7 +10,7 @@ using Windows.Foundation;
 namespace SismoPC.Ui.Controls;
 
 /// <summary>Point d'une courbe.</summary>
-public readonly record struct ChartPoint(DateTimeOffset At, double Value);
+public readonly record struct ChartPoint(DateTimeOffset At, double Value, bool IsObserved = true);
 
 /// <summary>
 /// Courbe temporelle légère (une série), avec bandes surlignées (épisodes) et curseur.
@@ -28,17 +28,38 @@ public sealed partial class LineChart : UserControl
     private double _max = 100;
     private int _seriesIndex;
     private DateTimeOffset? _cursor;
+    private readonly Line _cursorLine = new() { StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 3,3 } };
+    private readonly ToolTip _tooltip = new();
+    public string Unit { get; set; } = "";
 
     public LineChart()
     {
-        Height = 90;
+        Height = 120;
+        IsTabStop = true;
         Content = _canvas;
         SizeChanged += (_, _) => Redraw();
         ActualThemeChanged += (_, _) => Redraw();
         _canvas.PointerPressed += OnPointerPressed;
+        ToolTipService.SetToolTip(_canvas, _tooltip);
+        _canvas.PointerMoved += (_, e) =>
+        {
+            var at = AtX(e.GetCurrentPoint(_canvas).Position.X);
+            var point = Nearest(at);
+            _tooltip.Content = point is { } p ? $"{(p.IsObserved ? p.At : at).ToLocalTime():dd/MM HH:mm:ss} · {(p.IsObserved ? $"{p.Value:0.#} {Unit}" : "Sans relevé")}" : "Aucun relevé";
+            CursorMoved?.Invoke(this, at);
+        };
+        KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right)) return;
+            var step = TimeSpan.FromSeconds(Math.Max(5, (_to - _from).TotalSeconds / 100));
+            var at = (_cursor ?? _from) + (e.Key == Windows.System.VirtualKey.Left ? -step : step);
+            at = at < _from ? _from : at > _to ? _to : at;
+            SetCursor(at); TimeSelected?.Invoke(this, at); e.Handled = true;
+        };
     }
 
     public event EventHandler<DateTimeOffset>? TimeSelected;
+    public event EventHandler<DateTimeOffset>? CursorMoved;
 
     public void SetData(
         IReadOnlyList<ChartPoint> points,
@@ -62,14 +83,14 @@ public sealed partial class LineChart : UserControl
     public void SetCursor(DateTimeOffset? at)
     {
         _cursor = at;
-        Redraw();
+        UpdateCursor();
     }
 
     private double X(DateTimeOffset t, double width) =>
-        (t - _from).TotalSeconds / Math.Max(1, (_to - _from).TotalSeconds) * width;
+        42 + (t - _from).TotalSeconds / Math.Max(1, (_to - _from).TotalSeconds) * Math.Max(1, width - 50);
 
     private double Y(double v, double height) =>
-        height - (Math.Clamp(v, _min, _max) - _min) / (_max - _min) * height;
+        8 + Math.Max(1, height - 32) * (1 - (Math.Clamp(v, _min, _max) - _min) / (_max - _min));
 
     private void Redraw()
     {
@@ -82,8 +103,21 @@ public sealed partial class LineChart : UserControl
         }
 
         var grid = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"];
-        _canvas.Children.Add(new Line { X1 = 0, X2 = w, Y1 = h - 0.5, Y2 = h - 0.5, Stroke = grid, StrokeThickness = 1 });
-        _canvas.Children.Add(new Line { X1 = 0, X2 = w, Y1 = 0.5, Y2 = 0.5, Stroke = grid, StrokeThickness = 1 });
+        var foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        foreach (var value in new[] { _min, (_min+_max)/2, _max })
+        {
+            var y = Y(value,h);
+            _canvas.Children.Add(new Line { X1 = 42, X2 = w-8, Y1 = y, Y2 = y, Stroke = grid, StrokeThickness = .5 });
+            var label = new TextBlock { Text = value.ToString("0.#", UiKit.Fr), FontSize = 10, Foreground = foreground };
+            Canvas.SetTop(label, y-7); _canvas.Children.Add(label);
+        }
+        for (var i=0; i<3; i++)
+        {
+            var time = _from + TimeSpan.FromTicks((_to-_from).Ticks*i/2);
+            var label = new TextBlock { Text = time.ToLocalTime().ToString((_to-_from).TotalDays > 1 ? "dd/MM HH:mm" : "HH:mm", UiKit.Fr), FontSize = 10, Foreground = foreground };
+            Canvas.SetLeft(label, i==0 ? 42 : i==2 ? Math.Max(42,w-90) : X(time,w)-30);
+            Canvas.SetTop(label,h-20); _canvas.Children.Add(label);
+        }
 
         var warning = Palette.StatusColor(Status.Warning, this);
         foreach (var (start, end) in _bands)
@@ -98,10 +132,11 @@ public sealed partial class LineChart : UserControl
             var band = new Rectangle
             {
                 Width = Math.Max(3, x1 - x0),
-                Height = h,
+                Height = Math.Max(1,h-32),
                 Fill = new SolidColorBrush(ColorHelper.FromArgb(40, warning.R, warning.G, warning.B)),
             };
             Canvas.SetLeft(band, x0);
+            Canvas.SetTop(band, 8);
             _canvas.Children.Add(band);
         }
 
@@ -121,36 +156,47 @@ public sealed partial class LineChart : UserControl
                     .Select(p => new Point(g.Key, Y(p.point.Value, h))))
                 .ToList();
 
-            fill.Points.Add(new Point(reduced[0].X, h));
+            fill.Points.Add(new Point(reduced[0].X, Y(_min,h)));
             foreach (var p in reduced)
             {
                 line.Points.Add(p);
                 fill.Points.Add(p);
             }
 
-            fill.Points.Add(new Point(reduced[^1].X, h));
+            fill.Points.Add(new Point(reduced[^1].X, Y(_min,h)));
             _canvas.Children.Add(fill);
             _canvas.Children.Add(line);
         }
 
-        if (_cursor is { } cursor)
-        {
-            var x = X(cursor, w);
-            _canvas.Children.Add(new Line
-            {
-                X1 = x, X2 = x, Y1 = 0, Y2 = h,
-                Stroke = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"],
-                StrokeThickness = 1,
-                StrokeDashArray = new DoubleCollection { 3, 3 },
-            });
-        }
+        _cursorLine.Stroke = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+        _canvas.Children.Add(_cursorLine);
+        UpdateCursor();
+    }
+
+    private void UpdateCursor()
+    {
+        _cursorLine.Visibility = _cursor is { } at && at >= _from && at <= _to ? Visibility.Visible : Visibility.Collapsed;
+        if (_cursor is not { } value) return;
+        _cursorLine.X1 = _cursorLine.X2 = X(value,ActualWidth);
+        _cursorLine.Y1=8; _cursorLine.Y2=Math.Max(8,ActualHeight-24);
+    }
+
+    private DateTimeOffset AtX(double x) => _from + TimeSpan.FromSeconds((_to-_from).TotalSeconds * Math.Clamp((x-42)/Math.Max(1,ActualWidth-50),0,1));
+
+    private ChartPoint? Nearest(DateTimeOffset at)
+    {
+        if (_points.Count==0) return null;
+        var lo=0; var hi=_points.Count-1;
+        while(lo<hi) { var mid=(lo+hi)/2; if(_points[mid].At<at) lo=mid+1; else hi=mid; }
+        if(lo>0 && (at-_points[lo-1].At).Duration() < (_points[lo].At-at).Duration()) lo--;
+        return _points[lo];
     }
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        var x = e.GetCurrentPoint(_canvas).Position.X;
-        var w = Math.Max(1, ActualWidth);
-        var at = _from + TimeSpan.FromSeconds((_to - _from).TotalSeconds * Math.Clamp(x / w, 0, 1));
+        Focus(FocusState.Pointer);
+        var at = AtX(e.GetCurrentPoint(_canvas).Position.X);
+        SetCursor(at);
         TimeSelected?.Invoke(this, at);
     }
 }
