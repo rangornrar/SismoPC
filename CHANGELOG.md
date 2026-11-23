@@ -1,5 +1,11 @@
 # Changements
 
+## 0.4.1
+
+- Profil WebView2 explicitement placé dans `%LocalAppData%\SismoPC\WebView2`, afin que l'aperçu et l'export PDF fonctionnent depuis un dossier d'installation protégé comme Program Files.
+- Message distinct en cas de refus d'accès, code technique local et bouton pour réessayer l'aperçu ; l'absence de runtime n'est plus présumée pour toutes les erreurs.
+- Diagnostic minimal par utilisateur dans `%LocalAppData%\SismoPC\logs\preview.log`, sans contenu de rapport.
+
 ## 0.4.0
 
 - Accueil centré sur la situation, l'action utile, les incidents récents et quatre mesures compactes.

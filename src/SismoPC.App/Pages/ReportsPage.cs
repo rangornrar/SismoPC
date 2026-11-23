@@ -20,6 +20,7 @@ public sealed partial class ReportsPage : Page, IDisposable
     private readonly ComboBox _period = new() { ItemsSource = new[] { "7 derniers jours", "24 dernières heures", "30 derniers jours" }, SelectedIndex = 0, MinWidth = 220 };
     private readonly Button _pdf = new() { Content = "Enregistrer le PDF", IsEnabled = false };
     private readonly Button _html = new() { Content = "Enregistrer en HTML", IsEnabled = false };
+    private readonly Button _retry = new() { Content = "Réessayer l'aperçu", Visibility = Visibility.Collapsed };
     private readonly CancellationTokenSource _lifetime = new();
     private readonly CancellationToken _stop;
     private bool _disposed;
@@ -44,6 +45,7 @@ public sealed partial class ReportsPage : Page, IDisposable
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
         _pdf.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
         actions.Children.Add(_pdf); actions.Children.Add(_html);
+        actions.Children.Add(_retry);
         root.Children.Add(actions); root.Children.Add(_message); root.Children.Add(_preview);
         foreach (var box in new[] { _machine, _programs, _hardware, _identifiers })
         {
@@ -53,6 +55,7 @@ public sealed partial class ReportsPage : Page, IDisposable
         _period.SelectionChanged += async (_, _) => await RefreshAsync();
         _pdf.Click += async (_, _) => await ExportAsync(true);
         _html.Click += async (_, _) => await ExportAsync(false);
+        _retry.Click += async (_, _) => await RefreshAsync();
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -84,6 +87,8 @@ public sealed partial class ReportsPage : Page, IDisposable
         if (_stop.IsCancellationRequested) return;
         if (_rendering) { _pending = true; return; }
         _rendering = true;
+        _ready = false;
+        _retry.Visibility = Visibility.Collapsed;
         _pdf.IsEnabled = _html.IsEnabled = false;
         try
         {
@@ -107,14 +112,21 @@ public sealed partial class ReportsPage : Page, IDisposable
                 _document = ReportDocument.Html(content, options);
                 try
                 {
-                    await _preview.EnsureCoreWebView2Async();
-                    _preview.CoreWebView2.Settings.IsScriptEnabled = false;
+                    if (_preview.CoreWebView2 is null)
+                    {
+                        // Le dossier par défaut est voisin de l'exécutable et n'est pas accessible sous Program Files.
+                        var environment = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(
+                            null, PreviewProfile.DirectoryPath, new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions());
+                        if (_stop.IsCancellationRequested) return;
+                        await _preview.EnsureCoreWebView2Async(environment);
+                    }
+                    var core = _preview.CoreWebView2 ?? throw new IOException("Le moteur d'aperçu n'est pas initialisé.");
+                    core.Settings.IsScriptEnabled = false;
                     var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                     void Completed(Microsoft.Web.WebView2.Core.CoreWebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs args)
                     {
                         if (args.IsSuccess) loaded.TrySetResult(); else loaded.TrySetException(new IOException("Aperçu non chargé."));
                     }
-                    var core = _preview.CoreWebView2;
                     core.NavigationCompleted += Completed;
                     try { _preview.NavigateToString(_document); await loaded.Task.WaitAsync(TimeSpan.FromSeconds(15), _stop); }
                     finally { core.NavigationCompleted -= Completed; }
@@ -124,9 +136,15 @@ public sealed partial class ReportsPage : Page, IDisposable
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _ready = false;
+                    if (_stop.IsCancellationRequested) return;
+                    PreviewProfile.LogFailure(ex);
+                    _retry.Visibility = Visibility.Visible;
                     _message.Severity = InfoBarSeverity.Warning;
                     _message.Title = "Aperçu PDF indisponible";
-                    _message.Message = "Vérifiez le runtime Microsoft Edge WebView2. L'export HTML reste disponible pour ouvrir et imprimer le document dans votre navigateur.";
+                    _message.Message = ex is UnauthorizedAccessException || ex.HResult == unchecked((int)0x80070005)
+                        ? "Windows refuse l'accès au dossier local de l'aperçu. Vérifiez les droits de votre profil utilisateur, puis réessayez."
+                        : "Le moteur d'aperçu n'a pas pu démarrer ou charger le rapport. Réessayez ; l'export HTML reste disponible.";
+                    _message.Message += $" Code : 0x{ex.HResult:X8}. Détails : {PreviewProfile.LogPath}";
                 }
             } while (_pending);
         }
@@ -143,6 +161,7 @@ public sealed partial class ReportsPage : Page, IDisposable
     {
         if (_document is null || App.Window is null || _exporting) return;
         _exporting = true;
+        _retry.IsEnabled = false;
         _period.IsEnabled = _machine.IsEnabled = _programs.IsEnabled = _identifiers.IsEnabled = _hardware.IsEnabled = false;
         _pdf.IsEnabled = _html.IsEnabled = false;
         try
@@ -171,6 +190,7 @@ public sealed partial class ReportsPage : Page, IDisposable
         finally
         {
             _exporting = false;
+            _retry.IsEnabled = true;
             _period.IsEnabled = _machine.IsEnabled = _programs.IsEnabled = _identifiers.IsEnabled = _hardware.IsEnabled = true;
             _pdf.IsEnabled = _ready && !_stop.IsCancellationRequested; _html.IsEnabled = !_stop.IsCancellationRequested;
         }

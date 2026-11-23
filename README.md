@@ -2,7 +2,7 @@
 
 **SismoPC enregistre en continu l'activité et la santé de ton PC Windows, repère les ralentissements et les anomalies, et explique en clair ce qui s'est passé.**
 
-> Projet en développement (préversion v0.4.0). Licence MIT.
+> Projet en développement (préversion v0.4.1). Licence MIT.
 
 ## Ce que fait SismoPC
 

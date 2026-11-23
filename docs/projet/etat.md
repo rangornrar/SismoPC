@@ -26,3 +26,9 @@ Limites de recette : pas d'essais utilisateurs ni de mesure de recommandation/r�
 ## Livraison
 
 Canal existant : main et tags GitHub, préversions Windows x64. L'utilisateur a déjà demandé les publications sur ce canal. Ne pas modifier les réglages de collecte ou les données du service installé pour les tests ; utiliser un environnement d'essai séparé.
+
+## Correctif aperçu 0.4.1
+
+Le retour utilisateur après installation montre un aperçu indisponible malgré WebView2 157 installé. La 0.4.0 utilisait le profil par défaut près de l'exécutable : ce chemin n'est pas accessible en écriture sous Program Files. La 0.4.1 crée explicitement le profil dans LocalAppData, distingue le refus d'accès, conserve un diagnostic minimal et permet de réessayer.
+
+Recette : paquet 0.4.1 séparé, base de recette en lecture seule, chemin du profil par défaut bloqué par un fichier du même nom. L'aperçu est chargé, le bouton PDF actif et l'export A4 réussi. Le profil a bien été créé dans `C:\Users\user\AppData\Local\SismoPC\WebView2\EBWebView`. Preuves dans `output/pdf-fix/`. Aucune modification de l'installation ou du service de production. La mise à jour de l'installation utilisateur reste à effectuer avec l'installeur corrigé.
